@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lancekrogers/micbridge/internal/api"
+	"github.com/lancekrogers/micbridge/internal/audio"
 	"github.com/lancekrogers/micbridge/internal/binding"
 	"github.com/lancekrogers/micbridge/internal/core"
 	"github.com/lancekrogers/micbridge/internal/driver"
@@ -46,6 +47,8 @@ func run(args []string) int {
 		return cmdDevices(jsonOut)
 	case "doctor":
 		return cmdDoctor(jsonOut)
+	case "sources":
+		return cmdSources(jsonOut)
 	case "bindings":
 		return cmdBindings(args[1:], jsonOut)
 	case "record":
@@ -89,6 +92,7 @@ func printUsage() {
 	_, _ = fmt.Fprintln(os.Stdout, "  status     Daemon status")
 	_, _ = fmt.Fprintln(os.Stdout, "  devices    List devices")
 	_, _ = fmt.Fprintln(os.Stdout, "  doctor     Local diagnostics")
+	_, _ = fmt.Fprintln(os.Stdout, "  sources    List capture sources (no capture; uses malgo when cgo enabled)")
 	_, _ = fmt.Fprintln(os.Stdout, "  bindings   List or set bindings")
 	_, _ = fmt.Fprintln(os.Stdout, "  record     Arm/start recording")
 	_, _ = fmt.Fprintln(os.Stdout, "  stop       Stop recording")
@@ -267,6 +271,29 @@ func cmdDevices(jsonOut bool) int {
 	}
 	for _, d := range devs {
 		fmt.Printf("%s\t%s\t%s\n", d.Identity.DeviceID, d.Identity.DriverID, d.Identity.DisplayName)
+	}
+	return client.ExitOK
+}
+
+func cmdSources(jsonOut bool) int {
+	// Diagnostic only: enumerate, never open a capture stream.
+	var enum audio.Enumerator = &audio.MalgoEnumerator{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	srcs, err := enum.List(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "micbridge: sources: %v\n", err)
+		return client.ExitUnavailable
+	}
+	if jsonOut {
+		return printResult(true, "", map[string]any{"sources": srcs})
+	}
+	if len(srcs) == 0 {
+		fmt.Println("no capture sources")
+		return client.ExitOK
+	}
+	for _, s := range srcs {
+		fmt.Printf("%s\t%q\tavailable=%v\n", s.ID, s.Name, s.Available)
 	}
 	return client.ExitOK
 }
