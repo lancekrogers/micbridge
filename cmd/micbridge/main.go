@@ -18,6 +18,7 @@ import (
 	"github.com/lancekrogers/micbridge/internal/idgen"
 	"github.com/lancekrogers/micbridge/internal/recording"
 	"github.com/lancekrogers/micbridge/internal/storage"
+	"github.com/lancekrogers/micbridge/internal/ux"
 	"github.com/lancekrogers/micbridge/pkg/client"
 )
 
@@ -59,6 +60,10 @@ func run(args []string) int {
 		return cmdEvents(args[1:], jsonOut)
 	case "recover":
 		return cmdRecover(jsonOut)
+	case "setup":
+		return cmdSetup(jsonOut)
+	case "ui":
+		return cmdUI(args[1:], jsonOut)
 	default:
 		fmt.Fprintf(os.Stderr, "micbridge: unknown command %q (try 'micbridge help')\n", args[0])
 		return client.ExitUsage
@@ -98,6 +103,8 @@ func printUsage() {
 	_, _ = fmt.Fprintln(os.Stdout, "  stop       Stop recording")
 	_, _ = fmt.Fprintln(os.Stdout, "  events     Stream events")
 	_, _ = fmt.Fprintln(os.Stdout, "  recover    Request recovery transition")
+	_, _ = fmt.Fprintln(os.Stdout, "  setup      Guided device setup plan (JSON-friendly)")
+	_, _ = fmt.Fprintln(os.Stdout, "  ui         Print wide/narrow recorder view model")
 	_, _ = fmt.Fprintln(os.Stdout, "  help       Show this help")
 	_, _ = fmt.Fprintln(os.Stdout, "\nGlobal: --json or MICBRIDGE_JSON=1 for JSON output")
 	_, _ = fmt.Fprintln(os.Stdout, "Socket: MICBRIDGE_SOCK or state dir default")
@@ -428,6 +435,65 @@ func cmdEvents(args []string, jsonOut bool) int {
 			return client.ExitOK
 		}
 	}
+}
+
+func cmdSetup(jsonOut bool) int {
+	cl, err := newClient()
+	if err != nil {
+		return mapClientErr(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	devs, err := cl.Devices(ctx)
+	if err != nil {
+		return mapClientErr(err)
+	}
+	if len(devs) == 0 {
+		fmt.Fprintln(os.Stderr, "micbridge: no devices — start the daemon or connect a receiver")
+		return client.ExitUnavailable
+	}
+	plan := ux.BuildSetupPlan(devs[0])
+	if jsonOut {
+		return printResult(true, "", plan)
+	}
+	for i, s := range plan.Steps {
+		fmt.Printf("%d. %s\n   %s\n   → %s\n", i+1, s.Title, s.Body, s.Recommended)
+	}
+	return client.ExitOK
+}
+
+func cmdUI(args []string, jsonOut bool) int {
+	mode := "wide"
+	if len(args) > 0 {
+		mode = args[0]
+	}
+	cl, err := newClient()
+	if err != nil {
+		return mapClientErr(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	st, err := cl.Status(ctx)
+	if err != nil {
+		return mapClientErr(err)
+	}
+	snap := recording.Snapshot{State: recording.StateIdle}
+	if rec, ok := st["recording"].(map[string]any); ok {
+		if s, ok := rec["state"].(string); ok {
+			snap.State = recording.State(s)
+		}
+		if id, ok := rec["session_id"].(string); ok {
+			snap.SessionID = id
+		}
+	}
+	h := audio.Snapshot{Level: audio.HealthOK}
+	var view ux.RecorderView
+	if mode == "narrow" {
+		view = ux.NarrowView(snap, h)
+	} else {
+		view = ux.WideView(snap, h, "device")
+	}
+	return printResult(true, view.Message, view)
 }
 
 func cmdRecover(jsonOut bool) int {
