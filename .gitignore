@@ -1,0 +1,32 @@
+# Binaries
+/bin/
+/dist/
+/micbridge
+*.exe
+*.test
+*.out
+
+# Local runtime state
+/.micbridge/
+/state/
+*.sock
+
+# Recordings and journals (never commit user or test output)
+/recordings/
+/journals/
+*.wav
+*.partial
+*.journal
+*.journal.tmp
+
+# Coverage and tooling
+/coverage.out
+/coverage.html
+.golangci.cache/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
