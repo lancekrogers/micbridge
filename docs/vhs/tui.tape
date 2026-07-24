@@ -12,10 +12,10 @@ Env MICBRIDGE_FAKE "1"
 
 Type "rm -rf /tmp/micbridge-vhs-tui && mkdir -p /tmp/micbridge-vhs-tui"
 Enter
-Type "micbridge serve --json >/tmp/micbridge-vhs-tui/server.log 2>&1 & server_pid=$!"
+Type "./bin/micbridge serve --json >/tmp/micbridge-vhs-tui/server.log 2>&1 & server_pid=$!"
 Enter
 Sleep 500ms
-Type "micbridge ui"
+Type "./bin/micbridge ui"
 Enter
 Sleep 1s
 Enter

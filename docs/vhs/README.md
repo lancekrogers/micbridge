@@ -10,5 +10,6 @@ vhs docs/vhs/tui.tape
 vhs docs/vhs/recovery.tape
 ```
 
-Tapes use `micbridge` from PATH and a temporary state directory. They must not
-capture real audio or require a physical receiver.
+Tapes use the current checkout's `./bin/micbridge` and a temporary state
+directory, so an older installed binary cannot satisfy the evidence. They must
+not capture real audio or require a physical receiver.

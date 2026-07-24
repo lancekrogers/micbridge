@@ -12,14 +12,17 @@ Env MICBRIDGE_FAKE "1"
 
 Type "rm -rf /tmp/micbridge-vhs-setup && mkdir -p /tmp/micbridge-vhs-setup"
 Enter
-Type "micbridge serve --json >/tmp/micbridge-vhs-setup/server.log 2>&1 & server_pid=$!"
+Type "./bin/micbridge serve --json >/tmp/micbridge-vhs-setup/server.log 2>&1 & server_pid=$!"
 Enter
 Sleep 500ms
-Type "micbridge doctor --json"
+Type "./bin/micbridge doctor --json"
 Enter
 Sleep 300ms
-Type "micbridge devices --json"
+Type "./bin/micbridge devices --json"
 Enter
 Sleep 500ms
+Type "./bin/micbridge setup --json"
+Enter
+Sleep 750ms
 Type "kill $server_pid && wait $server_pid 2>/dev/null || true"
 Enter

@@ -11,19 +11,22 @@ Env MICBRIDGE_FAKE "1"
 
 Type "rm -rf /tmp/micbridge-vhs-rec && mkdir -p /tmp/micbridge-vhs-rec"
 Enter
-Type "micbridge serve --json >/tmp/micbridge-vhs-rec/server.log 2>&1 & server_pid=$!"
+Type "./bin/micbridge serve --json >/tmp/micbridge-vhs-rec/server.log 2>&1 & server_pid=$!"
 Enter
 Sleep 500ms
-Type "micbridge record arm --json"
+Type "./bin/micbridge record arm --json"
 Enter
 Sleep 300ms
-Type "micbridge record --json"
+Type "./bin/micbridge record --json"
 Enter
 Sleep 300ms
-Type "micbridge stop --json"
+Type "./bin/micbridge stop --json"
 Enter
 Sleep 300ms
-Type "micbridge status --json"
+Type "./bin/micbridge status --json"
+Enter
+Sleep 500ms
+Type "file /tmp/micbridge-vhs-rec/recordings/rec_1.wav"
 Enter
 Sleep 500ms
 Type "kill $server_pid && wait $server_pid 2>/dev/null || true"
