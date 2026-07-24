@@ -20,7 +20,7 @@ go install github.com/lancekrogers/micbridge/cmd/micbridge@latest
 On a Linux/amd64 host with the native build dependencies installed:
 
 ```bash
-just xrelease package-candidate VERSION=0.1.0-rc1
+VERSION=0.1.0-rc1 just xrelease package-candidate
 sha256sum --check dist/micbridge_0.1.0-rc1_linux_amd64.tar.gz.sha256
 ```
 

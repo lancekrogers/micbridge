@@ -67,7 +67,9 @@ jobs:
         run: just xtest fuzz-smoke
 
       - name: Reproducible Linux package candidate
-        run: just xrelease package-candidate VERSION=0.1.0-ci
+        env:
+          VERSION: 0.1.0-ci
+        run: just xrelease package-candidate
 
       - name: Confirm hardware tests are not in default CI
         run: |
