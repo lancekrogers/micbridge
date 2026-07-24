@@ -25,9 +25,9 @@ type Match struct {
 
 // ControlEvent is a normalized control observation from a device.
 type ControlEvent struct {
-	Type       string // pressed, released, held
-	Control    string
-	PressID    string
+	Type        string // pressed, released, held
+	Control     string
+	PressID     string
 	SideEffects []string
 }
 
@@ -61,10 +61,10 @@ type Driver interface {
 
 // Sentinel errors for registry selection.
 var (
-	ErrNoMatch       = fmt.Errorf("driver: no match")
-	ErrAmbiguous     = fmt.Errorf("driver: ambiguous match")
-	ErrUnsupported   = fmt.Errorf("driver: unsupported candidate")
-	ErrNotSupported  = fmt.Errorf("driver: operation not supported")
-	ErrAlreadyOpen   = fmt.Errorf("driver: already open")
-	ErrClosed        = fmt.Errorf("driver: closed")
+	ErrNoMatch      = fmt.Errorf("driver: no match")
+	ErrAmbiguous    = fmt.Errorf("driver: ambiguous match")
+	ErrUnsupported  = fmt.Errorf("driver: unsupported candidate")
+	ErrNotSupported = fmt.Errorf("driver: operation not supported")
+	ErrAlreadyOpen  = fmt.Errorf("driver: already open")
+	ErrClosed       = fmt.Errorf("driver: closed")
 )

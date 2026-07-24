@@ -158,11 +158,11 @@ func defaultCaps(s Scenario) []core.Capability {
 			DriverVersion:     DriverVersion,
 		},
 		{
-			Schema:       core.CapabilitySchema,
-			Key:          core.CapControlPress,
-			Availability: core.Available,
-			Evidence:     core.Evidence{Level: core.EvidenceMeasured, Summary: "scripted"},
-			SideEffects:  []core.SideEffect{{ID: "host.volume_increment", Passive: true, Description: "fake side effect"}},
+			Schema:        core.CapabilitySchema,
+			Key:           core.CapControlPress,
+			Availability:  core.Available,
+			Evidence:      core.Evidence{Level: core.EvidenceMeasured, Summary: "scripted"},
+			SideEffects:   []core.SideEffect{{ID: "host.volume_increment", Passive: true, Description: "fake side effect"}},
 			DriverVersion: DriverVersion,
 		},
 		{
@@ -189,10 +189,10 @@ type device struct {
 	events chan driver.ControlEvent
 }
 
-func (d *device) Identity() core.Identity          { return d.identity }
-func (d *device) Capabilities() []core.Capability  { return append([]core.Capability(nil), d.caps...) }
-func (d *device) ConnectionID() core.ConnectionID  { return d.conn }
-func (d *device) Surfaces() []core.Surface         { return append([]core.Surface(nil), d.surfaces...) }
+func (d *device) Identity() core.Identity         { return d.identity }
+func (d *device) Capabilities() []core.Capability { return append([]core.Capability(nil), d.caps...) }
+func (d *device) ConnectionID() core.ConnectionID { return d.conn }
+func (d *device) Surfaces() []core.Surface        { return append([]core.Surface(nil), d.surfaces...) }
 
 func (d *device) AudioSources(ctx context.Context) ([]driver.AudioSource, error) {
 	if err := ctx.Err(); err != nil {

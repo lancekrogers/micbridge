@@ -8,9 +8,9 @@ import (
 
 // Schema versions for core identity/capability envelopes.
 const (
-	IdentitySchema    = "micbridge.identity/v1"
-	CapabilitySchema  = "micbridge.capability/v1"
-	DeviceSchema      = "micbridge.device/v1"
+	IdentitySchema   = "micbridge.identity/v1"
+	CapabilitySchema = "micbridge.capability/v1"
+	DeviceSchema     = "micbridge.device/v1"
 )
 
 // DeviceID is a Micbridge-stable device identifier. It must never encode
@@ -73,14 +73,14 @@ type Surface struct {
 
 // Identity is the stable, vendor-neutral device identity.
 type Identity struct {
-	Schema         string            `json:"schema"`
-	DeviceID       DeviceID          `json:"device_id"`
-	DriverID       string            `json:"driver_id"`
-	DriverVersion  string            `json:"driver_version"`
-	DisplayName    string            `json:"display_name,omitempty"`
-	Serial         string            `json:"serial,omitempty"`
-	Attributes     map[string]string `json:"attributes,omitempty"`
-	InstallationAlias string         `json:"installation_alias,omitempty"`
+	Schema            string            `json:"schema"`
+	DeviceID          DeviceID          `json:"device_id"`
+	DriverID          string            `json:"driver_id"`
+	DriverVersion     string            `json:"driver_version"`
+	DisplayName       string            `json:"display_name,omitempty"`
+	Serial            string            `json:"serial,omitempty"`
+	Attributes        map[string]string `json:"attributes,omitempty"`
+	InstallationAlias string            `json:"installation_alias,omitempty"`
 	// Extra preserves unknown JSON fields for forward compatibility.
 	Extra map[string]any `json:"-"`
 }
@@ -145,11 +145,11 @@ func (id *Identity) UnmarshalJSON(data []byte) error {
 
 // Device is a stable identity plus current connection-scoped view.
 type Device struct {
-	Schema       string       `json:"schema"`
-	Identity     Identity     `json:"identity"`
-	ConnectionID ConnectionID `json:"connection_id,omitempty"`
-	Surfaces     []Surface    `json:"surfaces,omitempty"`
-	Capabilities []Capability `json:"capabilities,omitempty"`
+	Schema       string         `json:"schema"`
+	Identity     Identity       `json:"identity"`
+	ConnectionID ConnectionID   `json:"connection_id,omitempty"`
+	Surfaces     []Surface      `json:"surfaces,omitempty"`
+	Capabilities []Capability   `json:"capabilities,omitempty"`
 	Extra        map[string]any `json:"-"`
 }
 

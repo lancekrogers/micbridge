@@ -30,16 +30,16 @@ const (
 
 // Binding maps a device control to an action.
 type Binding struct {
-	Schema      string         `json:"schema"`
-	ID          ID             `json:"id"`
-	DeviceID    core.DeviceID  `json:"device_id"`
-	Control     string         `json:"control"`
-	On          string         `json:"on"` // pressed, released
-	Action      Action         `json:"action"`
-	DebounceMs  int            `json:"debounce_ms,omitempty"`
-	Enabled     bool           `json:"enabled"`
-	SideEffects []string       `json:"side_effects,omitempty"`
-	Reason      string         `json:"reason,omitempty"` // why inactive/invalid
+	Schema      string        `json:"schema"`
+	ID          ID            `json:"id"`
+	DeviceID    core.DeviceID `json:"device_id"`
+	Control     string        `json:"control"`
+	On          string        `json:"on"` // pressed, released
+	Action      Action        `json:"action"`
+	DebounceMs  int           `json:"debounce_ms,omitempty"`
+	Enabled     bool          `json:"enabled"`
+	SideEffects []string      `json:"side_effects,omitempty"`
+	Reason      string        `json:"reason,omitempty"` // why inactive/invalid
 }
 
 // Validate checks structural binding rules.
@@ -71,10 +71,10 @@ func (b Binding) Validate() error {
 
 // Decision is an auditable match result for one control event.
 type Decision struct {
-	BindingID ID
-	Action    Action
-	Accepted  bool
-	Reason    string
+	BindingID   ID
+	Action      Action
+	Accepted    bool
+	Reason      string
 	SideEffects []string
 }
 
@@ -89,11 +89,11 @@ type Command struct {
 
 // ControlInput is a normalized control observation for matching.
 type ControlInput struct {
-	DeviceID core.DeviceID
-	Type     string // pressed, released, held
-	Control  string
-	PressID  string
-	At       time.Time
+	DeviceID    core.DeviceID
+	Type        string // pressed, released, held
+	Control     string
+	PressID     string
+	At          time.Time
 	SideEffects []string
 }
 

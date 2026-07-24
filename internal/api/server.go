@@ -28,11 +28,11 @@ type Server struct {
 	Machine  *recording.Machine
 	Devices  func() []core.Device
 
-	mu       sync.Mutex
-	ln       net.Listener
-	httpSrv  *http.Server
-	socket   string
-	idem     map[string]idemEntry
+	mu      sync.Mutex
+	ln      net.Listener
+	httpSrv *http.Server
+	socket  string
+	idem    map[string]idemEntry
 }
 
 type idemEntry struct {

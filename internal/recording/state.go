@@ -49,11 +49,11 @@ const (
 
 // Command is an idempotent request to the session owner.
 type Command struct {
-	Name          CommandName
-	Actor         Actor
-	Reason        string
+	Name           CommandName
+	Actor          Actor
+	Reason         string
 	IdempotencyKey string
-	SessionID     string // optional; empty means current/new
+	SessionID      string // optional; empty means current/new
 }
 
 // TransitionError is a typed illegal or failed transition.
@@ -92,9 +92,9 @@ type Sink interface {
 
 // FakeSink is an in-memory sink for tests.
 type FakeSink struct {
-	mu      sync.Mutex
-	Calls   []string
-	FailOn  string
+	mu        sync.Mutex
+	Calls     []string
+	FailOn    string
 	PrepareFn func(ctx context.Context, id string) error
 }
 

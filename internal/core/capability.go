@@ -67,15 +67,15 @@ type SideEffect struct {
 
 // Capability is a versioned, evidence-backed device feature.
 type Capability struct {
-	Schema           string         `json:"schema"`
-	Key              CapabilityKey  `json:"key"`
-	Availability     Availability   `json:"availability"`
-	Mode             string         `json:"mode,omitempty"`
-	UnavailableReason string        `json:"unavailable_reason,omitempty"`
-	Evidence         Evidence       `json:"evidence"`
-	SideEffects      []SideEffect   `json:"side_effects,omitempty"`
-	DriverVersion    string         `json:"driver_version,omitempty"`
-	Extra            map[string]any `json:"-"`
+	Schema            string         `json:"schema"`
+	Key               CapabilityKey  `json:"key"`
+	Availability      Availability   `json:"availability"`
+	Mode              string         `json:"mode,omitempty"`
+	UnavailableReason string         `json:"unavailable_reason,omitempty"`
+	Evidence          Evidence       `json:"evidence"`
+	SideEffects       []SideEffect   `json:"side_effects,omitempty"`
+	DriverVersion     string         `json:"driver_version,omitempty"`
+	Extra             map[string]any `json:"-"`
 }
 
 // Validate checks capability structure.
