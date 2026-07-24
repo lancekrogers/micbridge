@@ -65,9 +65,7 @@ func candidateFromAttrs(c driver.Candidate) CandidateUSB {
 	}
 	// interfaces as comma list optional
 	if s := a["interfaces"]; s != "" {
-		for _, p := range splitInts(s) {
-			usb.InterfaceNums = append(usb.InterfaceNums, p)
-		}
+		usb.InterfaceNums = append(usb.InterfaceNums, splitInts(s)...)
 	}
 	return usb
 }
