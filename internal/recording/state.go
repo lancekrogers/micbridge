@@ -318,8 +318,7 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 		if cur.State != StateFailed && cur.State != StateRecovering {
 			return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "recover only from failed"}
 		}
-		next = StateRecovering
-		// recovery shell: mark completed recoverable → completed
+		// recovery shell: failed → recovering → completed in one command for phase 2.
 		next = StateCompleted
 	case CmdComplete:
 		if cur.State != StateStopping && cur.State != StateRecovering {

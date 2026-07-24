@@ -81,7 +81,7 @@ func TestFakeEventsDisconnectAndMalformed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dev.Close()
+	defer func() { _ = dev.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -111,7 +111,7 @@ func TestPermissionDeniedAudio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dev.Close()
+	defer func() { _ = dev.Close() }()
 	_, err = dev.AudioSources(context.Background())
 	if err == nil {
 		t.Fatal("expected permission error")
@@ -156,7 +156,7 @@ func TestReconnectStableIdentityNewPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dev2.Close()
+	defer func() { _ = dev2.Close() }()
 	if !id1.EqualStable(dev2.Identity()) {
 		t.Fatal("identity not stable across reconnect")
 	}

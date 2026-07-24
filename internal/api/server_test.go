@@ -67,7 +67,7 @@ func TestStatusAndDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatal(resp.Status)
 	}
@@ -75,7 +75,7 @@ func TestStatusAndDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&body)
 	devs := body["devices"].([]any)
@@ -96,7 +96,7 @@ func TestIdempotencyAndSchemaError(t *testing.T) {
 		t.Fatal(err)
 	}
 	body1, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	req2, _ := http.NewRequest(http.MethodPut, "http://unix/v1/bindings", bytes.NewReader(raw))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Idempotency-Key", "idem-1")
@@ -105,7 +105,7 @@ func TestIdempotencyAndSchemaError(t *testing.T) {
 		t.Fatal(err)
 	}
 	body2, _ := io.ReadAll(resp2.Body)
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 	if string(body1) != string(body2) {
 		t.Fatalf("idem mismatch %s vs %s", body1, body2)
 	}
@@ -115,7 +115,7 @@ func TestIdempotencyAndSchemaError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp3.Body.Close()
+	defer func() { _ = resp3.Body.Close() }()
 	if resp3.StatusCode != 400 {
 		t.Fatalf("status %d", resp3.StatusCode)
 	}
@@ -131,7 +131,7 @@ func TestPathContainment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 400 {
 		t.Fatalf("want path error, got %d", resp.StatusCode)
 	}
@@ -154,7 +154,7 @@ func TestEventResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		_, _ = srv.Bus.Publish("control.pressed", "dev_test", map[string]any{"control": "primary"})

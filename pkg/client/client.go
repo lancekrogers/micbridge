@@ -87,7 +87,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, headers 
 }
 
 func decodeErr(resp *http.Response) error {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var eb struct {
 		Error string `json:"error"`
 		Code  string `json:"code"`
@@ -105,7 +105,7 @@ func (c *Client) Status(ctx context.Context) (map[string]any, error) {
 	if resp.StatusCode != 200 {
 		return nil, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
 	return out, json.NewDecoder(resp.Body).Decode(&out)
 }
@@ -119,7 +119,7 @@ func (c *Client) Devices(ctx context.Context) ([]core.Device, error) {
 	if resp.StatusCode != 200 {
 		return nil, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		Devices []core.Device `json:"devices"`
 	}
@@ -138,7 +138,7 @@ func (c *Client) ListBindings(ctx context.Context) ([]binding.Binding, error) {
 	if resp.StatusCode != 200 {
 		return nil, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		Bindings []binding.Binding `json:"bindings"`
 	}
@@ -158,7 +158,7 @@ func (c *Client) PutBinding(ctx context.Context, b binding.Binding, idem string)
 	if resp.StatusCode != 200 {
 		return binding.Binding{}, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out binding.Binding
 	return out, json.NewDecoder(resp.Body).Decode(&out)
 }
@@ -172,7 +172,7 @@ func (c *Client) DeleteBinding(ctx context.Context, id string) error {
 	if resp.StatusCode != 204 && resp.StatusCode != 200 {
 		return decodeErr(resp)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return nil
 }
 
@@ -189,7 +189,7 @@ func (c *Client) CreateRecording(ctx context.Context, action, idem string) (reco
 	if resp.StatusCode != 200 {
 		return recording.Snapshot{}, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var snap recording.Snapshot
 	return snap, json.NewDecoder(resp.Body).Decode(&snap)
 }
@@ -208,7 +208,7 @@ func (c *Client) RecordingAction(ctx context.Context, id, action, idem string) (
 	if resp.StatusCode != 200 {
 		return recording.Snapshot{}, decodeErr(resp)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var snap recording.Snapshot
 	return snap, json.NewDecoder(resp.Body).Decode(&snap)
 }
@@ -244,7 +244,7 @@ func (c *Client) Events(ctx context.Context, cursor event.Sequence) (<-chan even
 			errs <- fmt.Errorf("daemon unavailable: %w", err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != 200 {
 			errs <- decodeErr(resp)
 			return

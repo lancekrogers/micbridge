@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -261,9 +260,8 @@ func (s *Server) handleRecordings(w http.ResponseWriter, r *http.Request) {
 		Title  string `json:"title"`
 		Output string `json:"output_path"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, context.Canceled) {
-		// empty body ok
-	}
+	// Empty body is allowed for arm/start defaults.
+	_ = json.NewDecoder(r.Body).Decode(&body)
 	if body.Output != "" {
 		if err := s.containPath(body.Output); err != nil {
 			s.writeErr(w, r, http.StatusBadRequest, "path_error", err.Error())
@@ -371,9 +369,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			b, _ := json.Marshal(env)
-			fmt.Fprintf(w, "id: %d\n", env.Sequence)
-			fmt.Fprintf(w, "event: %s\n", env.Type)
-			fmt.Fprintf(w, "data: %s\n\n", b)
+			_, _ = fmt.Fprintf(w, "id: %d\n", env.Sequence)
+			_, _ = fmt.Fprintf(w, "event: %s\n", env.Type)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", b)
 			flusher.Flush()
 		}
 	}

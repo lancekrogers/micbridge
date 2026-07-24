@@ -203,7 +203,7 @@ func cmdServe(args []string, jsonOut bool) int {
 		fmt.Fprintf(os.Stderr, "micbridge: serve: %v\n", err)
 		return client.ExitUnavailable
 	}
-	defer srv.Close(context.Background())
+	defer func() { _ = srv.Close(context.Background()) }()
 	_, _ = bus.Publish("device.connected", "dev_fake_1", nil)
 
 	if jsonOut {
@@ -321,9 +321,9 @@ func cmdBindings(args []string, jsonOut bool) int {
 			Schema: binding.Schema, ID: binding.ID(args[1]), DeviceID: core.DeviceID(args[2]),
 			Control: args[3], On: "pressed", Action: binding.Action(args[4]), Enabled: true,
 		}
-		out, err := cl.PutBinding(ctx, b, "")
-		if err != nil {
-			return mapClientErr(err)
+		out, putErr := cl.PutBinding(ctx, b, "")
+		if putErr != nil {
+			return mapClientErr(putErr)
 		}
 		return printResult(jsonOut, fmt.Sprintf("binding %s ok", out.ID), out)
 	}
