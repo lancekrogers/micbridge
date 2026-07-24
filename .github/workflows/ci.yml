@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (hardware-free)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@v5.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup just
+        uses: extractions/setup-just@v2
+
+      - name: Install Linux native build prerequisites
+        run: |
+          # CGO/miniaudio (malgo) and ALSA headers for future capture builds.
+          # No physical USB audio device is required for CI.
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libasound2-dev
+
+      - name: Bootstrap
+        run: just bootstrap
+
+      - name: Format, vet, unit tests
+        run: just check
+
+      - name: Race tests
+        run: just test-race
+
+      - name: Build
+        run: just build
+
+      - name: Demo smoke (temp state dir)
+        run: just demo
+
+      - name: Review gate (lint + race)
+        run: just review
+
+      - name: Confirm hardware tests are not in default CI
+        run: |
+          if just xdev hil-smoke; then
+            echo "HIL smoke must remain opt-in and fail without hardware in bootstrap"
+            exit 1
+          fi
+          echo "HIL remains opt-in (expected failure without hardware)"

@@ -39,11 +39,11 @@ func run(args []string) error {
 }
 
 func printUsage(w *os.File) {
-	fmt.Fprintf(w, "Usage: %s <command>\n\n", core.Name)
-	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  version   Print version")
-	fmt.Fprintln(w, "  status    Print daemon status (uses MICBRIDGE_STATE_DIR if set)")
-	fmt.Fprintln(w, "  help      Show this help")
+	_, _ = fmt.Fprintf(w, "Usage: %s <command>\n\n", core.Name)
+	_, _ = fmt.Fprintln(w, "Commands:")
+	_, _ = fmt.Fprintln(w, "  version   Print version")
+	_, _ = fmt.Fprintln(w, "  status    Print daemon status (uses MICBRIDGE_STATE_DIR if set)")
+	_, _ = fmt.Fprintln(w, "  help      Show this help")
 }
 
 func printStatus(args []string) error {

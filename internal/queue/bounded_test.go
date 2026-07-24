@@ -13,8 +13,8 @@ func TestBoundedOrderingAndDropNewest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 1; i <= 3; i++ {
-		if err := q.Push(i); err != nil {
-			t.Fatal(err)
+		if pushErr := q.Push(i); pushErr != nil {
+			t.Fatal(pushErr)
 		}
 	}
 	err = q.Push(99)
