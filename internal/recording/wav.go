@@ -19,13 +19,13 @@ type WAVFormat struct {
 
 // Writer writes a create-only WAV via a .partial path then atomic rename.
 type Writer struct {
-	finalPath    string
-	partialPath  string
-	f            *os.File
-	format       WAVFormat
-	dataBytes    uint32
-	crc          hash.Hash32
-	headerFixed  bool
+	finalPath   string
+	partialPath string
+	f           *os.File
+	format      WAVFormat
+	dataBytes   uint32
+	crc         hash.Hash32
+	headerFixed bool
 }
 
 // CreateWAV creates a new recording file; fails if final or partial exists.
@@ -148,10 +148,10 @@ func ValidateWAV(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	hdr := make([]byte, 44)
-	if _, err := io.ReadFull(f, hdr); err != nil {
-		return fmt.Errorf("recording: short wav header: %w", err)
+	if _, readErr := io.ReadFull(f, hdr); readErr != nil {
+		return fmt.Errorf("recording: short wav header: %w", readErr)
 	}
 	if string(hdr[0:4]) != "RIFF" || string(hdr[8:12]) != "WAVE" || string(hdr[36:40]) != "data" {
 		return fmt.Errorf("recording: invalid wav magic")

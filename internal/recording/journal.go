@@ -16,14 +16,14 @@ type Journal struct {
 
 // JournalRecord is one checkpoint.
 type JournalRecord struct {
-	SessionID  string    `json:"session_id"`
-	Step       string    `json:"step"` // created|wrote|synced|finalized|aborted
-	Partial    string    `json:"partial,omitempty"`
-	Final      string    `json:"final,omitempty"`
-	DataBytes  uint32    `json:"data_bytes,omitempty"`
-	CRC32      uint32    `json:"crc32,omitempty"`
-	At         time.Time `json:"at"`
-	Note       string    `json:"note,omitempty"`
+	SessionID string    `json:"session_id"`
+	Step      string    `json:"step"` // created|wrote|synced|finalized|aborted
+	Partial   string    `json:"partial,omitempty"`
+	Final     string    `json:"final,omitempty"`
+	DataBytes uint32    `json:"data_bytes,omitempty"`
+	CRC32     uint32    `json:"crc32,omitempty"`
+	At        time.Time `json:"at"`
+	Note      string    `json:"note,omitempty"`
 }
 
 // OpenJournal creates or appends a journal under journalsDir.

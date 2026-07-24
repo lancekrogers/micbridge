@@ -10,10 +10,10 @@ import (
 type HealthLevel string
 
 const (
-	HealthOK             HealthLevel = "ok"
-	HealthDegraded       HealthLevel = "degraded"
-	HealthDiscontinuous  HealthLevel = "discontinuous"
-	HealthDisconnected   HealthLevel = "disconnected"
+	HealthOK            HealthLevel = "ok"
+	HealthDegraded      HealthLevel = "degraded"
+	HealthDiscontinuous HealthLevel = "discontinuous"
+	HealthDisconnected  HealthLevel = "disconnected"
 )
 
 // Thresholds define warning/failure units for ingress health.
@@ -40,18 +40,18 @@ func DefaultThresholds() Thresholds {
 
 // Snapshot is a structured health view (never contains PCM).
 type Snapshot struct {
-	Level              HealthLevel `json:"level"`
-	FramesIn           uint64      `json:"frames_in"`
-	FramesOut          uint64      `json:"frames_out"`
-	Drops              uint64      `json:"drops"`
-	Discontinuities    uint64      `json:"discontinuities"`
-	QueueDepth         int         `json:"queue_depth"`
-	QueueHighWater     int         `json:"queue_high_water"`
-	LastSeq            uint64      `json:"last_seq"`
-	LastCallbackGapNs  int64       `json:"last_callback_gap_ns"`
-	MaxCallbackGapNs   int64       `json:"max_callback_gap_ns"`
-	Disconnected       bool        `json:"disconnected"`
-	Reason             string      `json:"reason,omitempty"`
+	Level             HealthLevel `json:"level"`
+	FramesIn          uint64      `json:"frames_in"`
+	FramesOut         uint64      `json:"frames_out"`
+	Drops             uint64      `json:"drops"`
+	Discontinuities   uint64      `json:"discontinuities"`
+	QueueDepth        int         `json:"queue_depth"`
+	QueueHighWater    int         `json:"queue_high_water"`
+	LastSeq           uint64      `json:"last_seq"`
+	LastCallbackGapNs int64       `json:"last_callback_gap_ns"`
+	MaxCallbackGapNs  int64       `json:"max_callback_gap_ns"`
+	Disconnected      bool        `json:"disconnected"`
+	Reason            string      `json:"reason,omitempty"`
 }
 
 // Monitor aggregates ingress health outside the callback.

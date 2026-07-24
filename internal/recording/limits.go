@@ -9,10 +9,10 @@ import (
 
 // Policy configures resource and disconnect behavior.
 type Policy struct {
-	MaxDuration       time.Duration
-	MinFreeBytes      uint64
-	OutputRoot        string
-	DisconnectGrace   time.Duration
+	MaxDuration     time.Duration
+	MinFreeBytes    uint64
+	OutputRoot      string
+	DisconnectGrace time.Duration
 	// AllowReconnectSameID permits resume only for the same SourceID.
 	AllowReconnectSameID bool
 }
@@ -73,9 +73,9 @@ func (p Policy) CheckDuration(elapsed time.Duration) error {
 
 // SourceLoss decides disconnect handling.
 type SourceLoss struct {
-	SourceID     string
-	LostAt       time.Time
-	Grace        time.Duration
+	SourceID      string
+	LostAt        time.Time
+	Grace         time.Duration
 	ReconnectedID string
 }
 
