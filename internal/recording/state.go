@@ -54,6 +54,7 @@ type Command struct {
 	Reason         string
 	IdempotencyKey string
 	SessionID      string // optional; empty means current/new
+	OutputPath     string // optional canonical create-only WAV target
 }
 
 // TransitionError is a typed illegal or failed transition.
@@ -70,12 +71,12 @@ func (e *TransitionError) Error() string {
 
 // Snapshot is an immutable view of session state.
 type Snapshot struct {
-	SessionID string
-	State     State
-	Actor     Actor
-	Reason    string
-	UpdatedAt time.Time
-	Title     string
+	SessionID string    `json:"session_id"`
+	State     State     `json:"state"`
+	Actor     Actor     `json:"actor"`
+	Reason    string    `json:"reason,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Title     string    `json:"title,omitempty"`
 }
 
 // Sink is the audio/session effect boundary (fake in this phase).
@@ -88,6 +89,11 @@ type Sink interface {
 	Stop(ctx context.Context, sessionID string) error
 	// Abort fails without finalizing as completed.
 	Abort(ctx context.Context, sessionID string, reason string) error
+}
+
+// OutputSink supports an API-selected create-only artifact path.
+type OutputSink interface {
+	PrepareAt(ctx context.Context, sessionID, outputPath string) error
 }
 
 // FakeSink is an in-memory sink for tests.
@@ -137,19 +143,26 @@ type Machine struct {
 	limits Limits
 
 	cmdCh  chan cmdReq
-	done   chan struct{}
+	runCtx context.Context
+	cancel context.CancelFunc
 	closed chan struct{}
 
 	// read via Snapshot under mu for tests; owner loop is authoritative.
 	mu        sync.RWMutex
 	snap      Snapshot
 	idem      map[string]Snapshot
-	listeners []chan Snapshot
+	idemOrder []string
+	listeners []*snapshotListener
 }
 
 type cmdReq struct {
+	ctx  context.Context
 	cmd  Command
 	resp chan cmdResp
+}
+
+type snapshotListener struct {
+	ch chan Snapshot
 }
 
 type cmdResp struct {
@@ -168,13 +181,15 @@ func NewMachine(clk clock.Clock, ids idgen.Generator, sink Sink, limits Limits) 
 	if sink == nil {
 		sink = &FakeSink{}
 	}
+	runCtx, cancel := context.WithCancel(context.Background())
 	m := &Machine{
 		clk:    clk,
 		ids:    ids,
 		sink:   sink,
 		limits: limits,
 		cmdCh:  make(chan cmdReq),
-		done:   make(chan struct{}),
+		runCtx: runCtx,
+		cancel: cancel,
 		closed: make(chan struct{}),
 		snap: Snapshot{
 			State:     StateIdle,
@@ -188,26 +203,67 @@ func NewMachine(clk clock.Clock, ids idgen.Generator, sink Sink, limits Limits) 
 
 func (m *Machine) loop() {
 	defer close(m.closed)
+	var (
+		durationTimer *time.Timer
+		durationC     <-chan time.Time
+	)
+	stopDuration := func() {
+		if durationTimer != nil {
+			if !durationTimer.Stop() {
+				select {
+				case <-durationTimer.C:
+				default:
+				}
+			}
+		}
+		durationTimer = nil
+		durationC = nil
+	}
+	defer stopDuration()
 	for {
 		select {
-		case <-m.done:
+		case <-m.runCtx.Done():
 			return
+		case <-durationC:
+			current := m.Snapshot()
+			_, _ = m.apply(m.runCtx, Command{
+				Name: CmdStop, Actor: ActorSystem, SessionID: current.SessionID,
+				Reason: "maximum duration reached",
+			})
+			stopDuration()
 		case req := <-m.cmdCh:
-			snap, err := m.apply(context.Background(), req.cmd)
+			ctx, cancel := context.WithCancel(req.ctx)
+			stop := context.AfterFunc(m.runCtx, cancel)
+			snap, err := m.apply(ctx, req.cmd)
+			stop()
+			cancel()
 			req.resp <- cmdResp{snap: snap, err: err}
+			if snap.State == StateRecording && m.limits.MaxDuration > 0 && durationTimer == nil {
+				durationTimer = time.NewTimer(m.limits.MaxDuration)
+				durationC = durationTimer.C
+			} else if snap.State != StateRecording {
+				stopDuration()
+			}
 		}
 	}
 }
 
 // Close stops the owner loop.
 func (m *Machine) Close() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = m.CloseContext(ctx)
+}
+
+// CloseContext cancels owned work and waits only as long as ctx permits.
+func (m *Machine) CloseContext(ctx context.Context) error {
+	m.cancel()
 	select {
-	case <-m.done:
-		return
-	default:
-		close(m.done)
+	case <-m.closed:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("recording: close: %w", ctx.Err())
 	}
-	<-m.closed
 }
 
 // Snapshot returns the current state.
@@ -217,20 +273,28 @@ func (m *Machine) Snapshot() Snapshot {
 	return m.snap
 }
 
+// IdempotencyEntries reports bounded retained command results for diagnostics.
+func (m *Machine) IdempotencyEntries() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.idem)
+}
+
 // Submit runs a command on the owner loop (serialized).
 func (m *Machine) Submit(ctx context.Context, cmd Command) (Snapshot, error) {
-	req := cmdReq{cmd: cmd, resp: make(chan cmdResp, 1)}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req := cmdReq{ctx: ctx, cmd: cmd, resp: make(chan cmdResp, 1)}
 	select {
 	case <-ctx.Done():
 		return Snapshot{}, ctx.Err()
-	case <-m.done:
+	case <-m.runCtx.Done():
 		return Snapshot{}, fmt.Errorf("recording: machine closed")
 	case m.cmdCh <- req:
 	}
 	select {
-	case <-ctx.Done():
-		return Snapshot{}, ctx.Err()
-	case <-m.done:
+	case <-m.runCtx.Done():
 		return Snapshot{}, fmt.Errorf("recording: machine closed")
 	case resp := <-req.resp:
 		return resp.snap, resp.err
@@ -238,6 +302,9 @@ func (m *Machine) Submit(ctx context.Context, cmd Command) (Snapshot, error) {
 }
 
 func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return m.snap, err
+	}
 	if cmd.IdempotencyKey != "" {
 		if prev, ok := m.idem[cmd.IdempotencyKey]; ok {
 			return prev, nil
@@ -258,7 +325,10 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 			return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "arm only from idle/completed/failed"}
 		}
 		sid = m.ids.Next("rec")
-		if err = m.sink.Prepare(ctx, sid); err != nil {
+		if err = m.prepare(ctx, sid, cmd.OutputPath); err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return cur, ctxErr
+			}
 			next = StateFailed
 			err = fmt.Errorf("prepare: %w", err)
 		} else {
@@ -271,7 +341,10 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 		case StateIdle:
 			// arm+start
 			sid = m.ids.Next("rec")
-			if err = m.sink.Prepare(ctx, sid); err != nil {
+			if err = m.prepare(ctx, sid, cmd.OutputPath); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return cur, ctxErr
+				}
 				next = StateFailed
 				break
 			}
@@ -284,6 +357,9 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 		}
 		if next == StateStarting {
 			if err = m.sink.Start(ctx, sid); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return cur, ctxErr
+				}
 				_ = m.sink.Abort(ctx, sid, err.Error())
 				next = StateFailed
 			} else {
@@ -306,6 +382,9 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 		}
 		if next == StateStopping {
 			if err = m.sink.Stop(ctx, sid); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return cur, ctxErr
+				}
 				next = StateFailed
 			} else {
 				next = StateCompleted
@@ -343,20 +422,39 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 	m.mu.Lock()
 	m.snap = snap
 	if cmd.IdempotencyKey != "" {
+		if _, exists := m.idem[cmd.IdempotencyKey]; !exists {
+			m.idemOrder = append(m.idemOrder, cmd.IdempotencyKey)
+		}
 		m.idem[cmd.IdempotencyKey] = snap
+		const maxIdempotencyEntries = 1024
+		if len(m.idemOrder) > maxIdempotencyEntries {
+			oldest := m.idemOrder[0]
+			m.idemOrder = m.idemOrder[1:]
+			delete(m.idem, oldest)
+		}
 	}
-	listeners := append([]chan Snapshot(nil), m.listeners...)
-	m.mu.Unlock()
-	for _, ch := range listeners {
+	for _, listener := range m.listeners {
 		select {
-		case ch <- snap:
+		case listener.ch <- snap:
 		default:
 		}
 	}
+	m.mu.Unlock()
 	if err != nil && next == StateFailed {
 		return snap, err
 	}
 	return snap, nil
+}
+
+func (m *Machine) prepare(ctx context.Context, sessionID, outputPath string) error {
+	if outputPath == "" {
+		return m.sink.Prepare(ctx, sessionID)
+	}
+	outputSink, ok := m.sink.(OutputSink)
+	if !ok {
+		return fmt.Errorf("recording: selected output path is not supported by this sink")
+	}
+	return outputSink.PrepareAt(ctx, sessionID, outputPath)
 }
 
 // Watch returns a non-blocking snapshot stream; cancel by calling the stop func.
@@ -365,19 +463,23 @@ func (m *Machine) Watch(buffer int) (<-chan Snapshot, func()) {
 		buffer = 1
 	}
 	ch := make(chan Snapshot, buffer)
+	listener := &snapshotListener{ch: ch}
 	m.mu.Lock()
-	m.listeners = append(m.listeners, ch)
+	m.listeners = append(m.listeners, listener)
 	m.mu.Unlock()
+	var once sync.Once
 	stop := func() {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		for i, c := range m.listeners {
-			if c == ch {
-				m.listeners = append(m.listeners[:i], m.listeners[i+1:]...)
-				close(ch)
-				return
+		once.Do(func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			for i, candidate := range m.listeners {
+				if candidate == listener {
+					m.listeners = append(m.listeners[:i], m.listeners[i+1:]...)
+					close(ch)
+					return
+				}
 			}
-		}
+		})
 	}
 	return ch, stop
 }

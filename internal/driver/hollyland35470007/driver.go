@@ -1,8 +1,15 @@
 package hollyland35470007
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/lancekrogers/micbridge/internal/core"
@@ -12,16 +19,26 @@ import (
 
 // Driver is the compiled-in exact receiver driver.
 type Driver struct {
-	profile Profile
-	ids     idgen.Generator
+	profile      Profile
+	ids          idgen.Generator
+	identitySalt []byte
 }
 
 // New returns a Hollyland 3547:0007 driver.
 func New(ids idgen.Generator) *Driver {
+	return NewWithIdentitySalt(ids, []byte(DriverID))
+}
+
+// NewWithIdentitySalt creates a driver whose hardware-correlated IDs are
+// unlinkable to IDs from a different installation salt.
+func NewWithIdentitySalt(ids idgen.Generator, salt []byte) *Driver {
 	if ids == nil {
 		ids = &idgen.Atomic{}
 	}
-	return &Driver{profile: DefaultProfile(), ids: ids}
+	if len(salt) == 0 {
+		salt = []byte(DriverID)
+	}
+	return &Driver{profile: DefaultProfile(), ids: ids, identitySalt: append([]byte(nil), salt...)}
 }
 
 func (d *Driver) ID() string      { return DriverID }
@@ -36,7 +53,12 @@ func (d *Driver) Match(ctx context.Context, c driver.Candidate) (driver.Match, e
 	res, why := EvaluateMatch(d.profile, usb)
 	switch res {
 	case MatchExact:
-		id := IdentityFor(c.Attributes["serial"])
+		id := identityFor(c.Attributes["serial"], d.identitySalt)
+		if c.Attributes["serial"] == "" || c.Attributes["serial"] == "present-redacted" {
+			// Without a correlatable serial, candidates must remain distinct
+			// and explicitly connection-scoped instead of silently collapsing.
+			id.DeviceID = core.DeviceID("dev_hl_" + d.ids.Next("candidate"))
+		}
 		return driver.Match{
 			DriverID: DriverID, DriverVersion: DriverVersion,
 			Confidence: "exact", Identity: id,
@@ -58,37 +80,61 @@ func candidateFromAttrs(c driver.Candidate) CandidateUSB {
 	usb := CandidateUSB{
 		VID: a["usb_vid"], PID: a["usb_pid"],
 		Manufacturer: a["manufacturer"], Product: a["product"],
-		HasHID:      a["has_hid"] == "1" || a["has_hid"] == "true",
-		HasAudio:    a["has_audio"] == "1" || a["has_audio"] == "true",
-		HasVendorIF: a["has_vendor"] == "1" || a["has_vendor"] == "true",
-		BusDevice:   a["bus_device"],
+		BusDevice: a["bus_device"], DescriptorDigest: strings.ToLower(a["descriptor_digest"]),
 	}
-	// interfaces as comma list optional
+	if len(usb.DescriptorDigest) != sha256.Size*2 {
+		usb.MalformedReason = "missing or malformed descriptor digest"
+		return usb
+	}
+	if _, err := hex.DecodeString(usb.DescriptorDigest); err != nil {
+		usb.MalformedReason = "malformed descriptor digest"
+		return usb
+	}
+	rawShape := a["interface_descriptors"]
+	if rawShape == "" {
+		usb.MalformedReason = "missing structured interface descriptors"
+		return usb
+	}
+	decoder := json.NewDecoder(bytes.NewBufferString(rawShape))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&usb.Descriptors); err != nil {
+		usb.MalformedReason = "malformed structured interface descriptors"
+		return usb
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		usb.MalformedReason = "multiple values in interface descriptors"
+		return usb
+	}
+	usb.InterfaceNums, usb.HasAudio, usb.HasHID, usb.HasVendorIF = summarizeDescriptors(usb.Descriptors)
+	// The legacy summary must agree with the structured source if present.
 	if s := a["interfaces"]; s != "" {
-		usb.InterfaceNums = append(usb.InterfaceNums, splitInts(s)...)
+		values, err := splitInts(s)
+		if err != nil {
+			usb.MalformedReason = err.Error()
+			return usb
+		}
+		if !sameInterfaceSet(values, usb.InterfaceNums) {
+			usb.MalformedReason = "interface summary disagrees with structured descriptors"
+			return usb
+		}
 	}
 	return usb
 }
 
-func splitInts(s string) []int {
+func splitInts(s string) ([]int, error) {
 	var out []int
-	cur := 0
-	has := false
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ',' {
-			if has {
-				out = append(out, cur)
-			}
-			cur = 0
-			has = false
-			continue
+	for _, part := range strings.Split(s, ",") {
+		if part == "" {
+			return nil, fmt.Errorf("malformed interface list")
 		}
-		if s[i] >= '0' && s[i] <= '9' {
-			cur = cur*10 + int(s[i]-'0')
-			has = true
+		value, err := strconv.Atoi(part)
+		if err != nil || value < 0 || value > 255 {
+			return nil, fmt.Errorf("malformed interface number %q", part)
 		}
+		out = append(out, value)
 	}
-	return out
+	return out, nil
 }
 
 // Open groups audio + control surfaces under one connection.
@@ -112,17 +158,33 @@ func (d *Driver) Open(ctx context.Context, m driver.Match, c driver.Candidate) (
 		},
 		caps: Capabilities(),
 	}
+	access := DoctorAccess(audioPath, ctrlPath)
+	for i := range dev.caps {
+		switch dev.caps[i].Key {
+		case core.CapAudioCapture:
+			if audioPath == "" || !access.OK {
+				dev.caps[i].Availability = core.Unavailable
+				dev.caps[i].UnavailableReason = "capture/control surfaces were not correlated or accessible"
+			}
+		case core.CapControlPress, core.CapControlRelease:
+			if ctrlPath == "" || !access.OK {
+				dev.caps[i].Availability = core.Unavailable
+				dev.caps[i].UnavailableReason = "evdev control node was not correlated or accessible"
+			}
+		}
+	}
 	return dev, nil
 }
 
 type device struct {
-	identity core.Identity
-	conn     core.ConnectionID
-	surfaces []core.Surface
-	caps     []core.Capability
-	mu       sync.Mutex
-	closed   bool
-	events   chan driver.ControlEvent
+	identity    core.Identity
+	conn        core.ConnectionID
+	surfaces    []core.Surface
+	caps        []core.Capability
+	mu          sync.Mutex
+	closed      bool
+	events      chan driver.ControlEvent
+	eventCancel context.CancelFunc
 }
 
 func (d *device) Identity() core.Identity         { return d.identity }
@@ -150,11 +212,32 @@ func (d *device) Events(ctx context.Context) (<-chan driver.ControlEvent, error)
 		return nil, driver.ErrAlreadyOpen
 	}
 	ch := make(chan driver.ControlEvent, 8)
+	eventCtx, cancel := context.WithCancel(ctx)
 	d.events = ch
+	d.eventCancel = cancel
 	go func() {
-		defer close(ch)
-		<-ctx.Done()
+		<-eventCtx.Done()
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.events == ch {
+			close(ch)
+			d.events = nil
+			d.eventCancel = nil
+		}
 	}()
+	controlPath := ""
+	for _, surface := range d.surfaces {
+		if surface.Kind == core.SurfaceControl {
+			controlPath = surface.TransientPath
+			break
+		}
+	}
+	if controlPath != "" {
+		go func() {
+			_ = readEvdev(eventCtx, controlPath, d.InjectControl)
+			cancel()
+		}()
+	}
 	return ch, nil
 }
 
@@ -186,8 +269,16 @@ func (d *device) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
-		return driver.ErrClosed
+		return nil
 	}
 	d.closed = true
+	if d.eventCancel != nil {
+		d.eventCancel()
+		d.eventCancel = nil
+	}
+	if d.events != nil {
+		close(d.events)
+		d.events = nil
+	}
 	return nil
 }

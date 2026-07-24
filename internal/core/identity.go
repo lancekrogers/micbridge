@@ -110,8 +110,33 @@ func (id Identity) Validate() error {
 func (id Identity) EqualStable(other Identity) bool {
 	return id.DeviceID == other.DeviceID &&
 		id.DriverID == other.DriverID &&
-		id.Serial == other.Serial &&
-		id.InstallationAlias == other.InstallationAlias
+		id.Serial == other.Serial
+}
+
+// MarshalJSON preserves unknown surface fields.
+func (s Surface) MarshalJSON() ([]byte, error) {
+	type alias Surface
+	base, err := json.Marshal(alias(s))
+	if err != nil {
+		return nil, err
+	}
+	return mergeExtra(base, s.Extra)
+}
+
+// UnmarshalJSON captures unknown surface fields.
+func (s *Surface) UnmarshalJSON(data []byte) error {
+	type alias Surface
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*s = Surface(decoded)
+	extra, err := extractExtra(data, []string{"id", "kind", "label", "transient_path"})
+	if err != nil {
+		return err
+	}
+	s.Extra = extra
+	return nil
 }
 
 // MarshalJSON preserves unknown fields.

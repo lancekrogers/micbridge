@@ -5,12 +5,26 @@ Set FontSize 14
 Set Width 1000
 Set Height 500
 
-Env MICBRIDGE_STATE_DIR /tmp/micbridge-vhs-rec
-Env MICBRIDGE_SOCK /tmp/micbridge-vhs-rec/micbridge.sock
+Env MICBRIDGE_STATE_DIR "/tmp/micbridge-vhs-rec"
+Env MICBRIDGE_SOCK "/tmp/micbridge-vhs-rec/micbridge.sock"
+Env MICBRIDGE_FAKE "1"
 
-Type "micbridge version"  
+Type "rm -rf /tmp/micbridge-vhs-rec && mkdir -p /tmp/micbridge-vhs-rec"
 Enter
-Sleep 200ms
-Type "micbridge doctor --json"  
+Type "micbridge serve --json >/tmp/micbridge-vhs-rec/server.log 2>&1 & server_pid=$!"
 Enter
 Sleep 500ms
+Type "micbridge record arm --json"
+Enter
+Sleep 300ms
+Type "micbridge record --json"
+Enter
+Sleep 300ms
+Type "micbridge stop --json"
+Enter
+Sleep 300ms
+Type "micbridge status --json"
+Enter
+Sleep 500ms
+Type "kill $server_pid && wait $server_pid 2>/dev/null || true"
+Enter

@@ -9,6 +9,8 @@ import (
 
 	"github.com/lancekrogers/micbridge/internal/api"
 	"github.com/lancekrogers/micbridge/internal/binding"
+	"github.com/lancekrogers/micbridge/internal/core"
+	"github.com/lancekrogers/micbridge/internal/driver"
 	"github.com/lancekrogers/micbridge/internal/event"
 	"github.com/lancekrogers/micbridge/internal/idgen"
 	"github.com/lancekrogers/micbridge/internal/recording"
@@ -78,10 +80,65 @@ func TestServeOnce(t *testing.T) {
 	t.Setenv("MICBRIDGE_STATE_DIR", dir)
 	t.Setenv("MICBRIDGE_SOCK", filepath.Join(dir, "s.sock"))
 	t.Setenv("MICBRIDGE_SERVE_ONCE", "1")
+	t.Setenv("MICBRIDGE_FAKE", "1")
 	code := run([]string{"serve"})
 	if code != client.ExitOK {
 		t.Fatal(code)
 	}
 	time.Sleep(10 * time.Millisecond)
 	_ = os.Remove(filepath.Join(dir, "s.sock"))
+}
+
+func TestTwoPressControlPathCreatesFinalizedWAV(t *testing.T) {
+	root := t.TempDir()
+	recDir := filepath.Join(root, "recordings")
+	journalDir := filepath.Join(root, "journals")
+	format := recording.WAVFormat{SampleRate: 48000, Channels: 2, BitsPerSample: 16}
+	sink := recording.NewWAVSink(
+		recDir, journalDir, format, recording.DefaultPolicy(recDir),
+		recording.SyntheticPCMStarter(format, 5*time.Millisecond),
+	)
+	machine := recording.NewMachine(nil, idgen.NewSeeded("press"), sink, recording.Limits{})
+	defer machine.Close()
+	engine := binding.NewEngine()
+	deviceID := core.DeviceID("dev_hollyland_test")
+	_, err := engine.Upsert(binding.Binding{
+		Schema: binding.Schema, ID: "primary", DeviceID: deviceID,
+		Control: "primary", On: "pressed", Action: binding.ActionRecordingToggle, Enabled: true,
+	}, []core.Capability{{
+		Schema: core.CapabilitySchema, Key: core.CapControlPress,
+		Availability: core.Available, Evidence: core.Evidence{Level: core.EvidenceMeasured},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	armed, err := machine.Submit(context.Background(), recording.Command{Name: recording.CmdArm, Actor: recording.ActorCLI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := event.NewBus()
+	defer bus.Close()
+	controls := make(chan driver.ControlEvent, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go consumeControlEvents(ctx, bus, engine, machine, deviceID, controls)
+	controls <- driver.ControlEvent{Type: "pressed", Control: "primary", PressID: "p1"}
+	waitForState(t, machine, recording.StateRecording)
+	controls <- driver.ControlEvent{Type: "pressed", Control: "primary", PressID: "p2"}
+	waitForState(t, machine, recording.StateCompleted)
+	if err := recording.ValidateWAV(filepath.Join(recDir, armed.SessionID+".wav")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitForState(t *testing.T, machine *recording.Machine, want recording.State) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if machine.Snapshot().State == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("state=%s want=%s", machine.Snapshot().State, want)
 }

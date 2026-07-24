@@ -1,5 +1,7 @@
 # Build module — artifacts and cleanup
 
+set working-directory := ".."
+
 bin_dir := "bin"
 binary_name := "micbridge"
 cmd_pkg := "./cmd/micbridge"

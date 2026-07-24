@@ -80,11 +80,32 @@ demo: build
     #!/usr/bin/env bash
     set -euo pipefail
     tmp="$(mktemp -d "${TMPDIR:-/tmp}/micbridge-demo.XXXXXX")"
-    cleanup() { rm -rf "$tmp"; }
+    sock="$tmp/micbridge.sock"
+    server_pid=""
+    cleanup() {
+      if [[ -n "$server_pid" ]]; then
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+      fi
+      rm -rf "$tmp"
+    }
     trap cleanup EXIT
     echo "demo: state_dir=$tmp"
     MICBRIDGE_STATE_DIR="$tmp" "./{{bin_dir}}/{{binary_name}}" version
-    MICBRIDGE_STATE_DIR="$tmp" "./{{bin_dir}}/{{binary_name}}" status
+    MICBRIDGE_FAKE=1 MICBRIDGE_STATE_DIR="$tmp" MICBRIDGE_SOCK="$sock" \
+      "./{{bin_dir}}/{{binary_name}}" serve --json >"$tmp/server.log" 2>&1 &
+    server_pid=$!
+    for _ in $(seq 1 100); do
+      [[ -S "$sock" ]] && break
+      if ! kill -0 "$server_pid" 2>/dev/null; then
+        cat "$tmp/server.log"
+        exit 1
+      fi
+      sleep 0.02
+    done
+    [[ -S "$sock" ]] || { cat "$tmp/server.log"; echo "demo: socket was not ready"; exit 1; }
+    MICBRIDGE_STATE_DIR="$tmp" MICBRIDGE_SOCK="$sock" \
+      "./{{bin_dir}}/{{binary_name}}" status --json
 
 # Static analysis + race tests for review gates.
 review: _fmt-check _vet _lint test-race
@@ -118,6 +139,10 @@ _lint:
     if command -v golangci-lint >/dev/null 2>&1; then
       golangci-lint run ./...
     else
+      if [[ "${MICBRIDGE_REQUIRE_LINT:-0}" == "1" ]]; then
+        echo "lint: MICBRIDGE_REQUIRE_LINT=1 but golangci-lint is missing"
+        exit 1
+      fi
       echo "lint: golangci-lint not on PATH; running go vet only"
       go vet ./...
     fi

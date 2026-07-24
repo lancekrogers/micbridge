@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -78,7 +79,7 @@ func (r *Registry) Select(ctx context.Context, c Candidate) (Match, Driver, erro
 		}
 		m, err := d.Match(ctx, c)
 		if err != nil {
-			if err == ErrNoMatch || err == ErrUnsupported {
+			if errors.Is(err, ErrNoMatch) || errors.Is(err, ErrUnsupported) {
 				continue
 			}
 			return Match{}, nil, err

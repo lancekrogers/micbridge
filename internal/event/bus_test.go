@@ -89,6 +89,52 @@ done:
 	}
 }
 
+func TestSlowSubscriberGapCoversEveryDroppedSequence(t *testing.T) {
+	bus := event.NewBus(event.WithIDs(idgen.NewSeeded("exact")), event.WithLogCapacity(8))
+	defer bus.Close()
+	ch, unsub, err := bus.Subscribe(1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unsub()
+
+	_, _ = bus.Publish("control.pressed", "dev_1", nil)
+	_, _ = bus.Publish("control.pressed", "dev_1", nil)
+	gap := <-ch
+	if gap.Type != event.TypeStreamGap {
+		t.Fatalf("want gap, got %s", gap.Type)
+	}
+	if got := gap.Data["from_sequence"]; got != event.Sequence(1) {
+		t.Fatalf("from_sequence=%v", got)
+	}
+	if got := gap.Data["to_sequence"]; got != event.Sequence(2) {
+		t.Fatalf("to_sequence=%v", got)
+	}
+}
+
+func TestReplayOverflowAlwaysDeliversExactGap(t *testing.T) {
+	bus := event.NewBus(event.WithIDs(idgen.NewSeeded("replay")), event.WithLogCapacity(8))
+	defer bus.Close()
+	for i := 0; i < 5; i++ {
+		_, _ = bus.Publish("device.ready", "dev_1", nil)
+	}
+	ch, unsub, err := bus.Subscribe(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unsub()
+	gap := <-ch
+	if gap.Type != event.TypeStreamGap {
+		t.Fatalf("want replay gap, got %s", gap.Type)
+	}
+	if got := gap.Data["from_sequence"]; got != event.Sequence(2) {
+		t.Fatalf("from_sequence=%v", got)
+	}
+	if got := gap.Data["to_sequence"]; got != event.Sequence(5) {
+		t.Fatalf("to_sequence=%v", got)
+	}
+}
+
 func TestReplayCursorAndHistoryGap(t *testing.T) {
 	bus := event.NewBus(event.WithIDs(idgen.NewSeeded("r")), event.WithLogCapacity(3))
 	defer bus.Close()

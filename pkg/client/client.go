@@ -14,10 +14,6 @@ import (
 	"time"
 
 	"github.com/lancekrogers/micbridge/internal/api"
-	"github.com/lancekrogers/micbridge/internal/binding"
-	"github.com/lancekrogers/micbridge/internal/core"
-	"github.com/lancekrogers/micbridge/internal/event"
-	"github.com/lancekrogers/micbridge/internal/recording"
 )
 
 // Exit codes for CLI parity.
@@ -111,7 +107,7 @@ func (c *Client) Status(ctx context.Context) (map[string]any, error) {
 }
 
 // Devices returns /v1/devices.
-func (c *Client) Devices(ctx context.Context) ([]core.Device, error) {
+func (c *Client) Devices(ctx context.Context) ([]Device, error) {
 	resp, err := c.do(ctx, http.MethodGet, "/v1/devices", nil, nil)
 	if err != nil {
 		return nil, err
@@ -121,7 +117,7 @@ func (c *Client) Devices(ctx context.Context) ([]core.Device, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	var body struct {
-		Devices []core.Device `json:"devices"`
+		Devices []Device `json:"devices"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return nil, err
@@ -130,7 +126,7 @@ func (c *Client) Devices(ctx context.Context) ([]core.Device, error) {
 }
 
 // ListBindings returns bindings.
-func (c *Client) ListBindings(ctx context.Context) ([]binding.Binding, error) {
+func (c *Client) ListBindings(ctx context.Context) ([]Binding, error) {
 	resp, err := c.do(ctx, http.MethodGet, "/v1/bindings", nil, nil)
 	if err != nil {
 		return nil, err
@@ -140,26 +136,26 @@ func (c *Client) ListBindings(ctx context.Context) ([]binding.Binding, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	var body struct {
-		Bindings []binding.Binding `json:"bindings"`
+		Bindings []Binding `json:"bindings"`
 	}
 	return body.Bindings, json.NewDecoder(resp.Body).Decode(&body)
 }
 
 // PutBinding creates or replaces a binding.
-func (c *Client) PutBinding(ctx context.Context, b binding.Binding, idem string) (binding.Binding, error) {
+func (c *Client) PutBinding(ctx context.Context, b Binding, idem string) (Binding, error) {
 	headers := map[string]string{}
 	if idem != "" {
 		headers["Idempotency-Key"] = idem
 	}
 	resp, err := c.do(ctx, http.MethodPut, "/v1/bindings", b, headers)
 	if err != nil {
-		return binding.Binding{}, err
+		return Binding{}, err
 	}
 	if resp.StatusCode != 200 {
-		return binding.Binding{}, decodeErr(resp)
+		return Binding{}, decodeErr(resp)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var out binding.Binding
+	var out Binding
 	return out, json.NewDecoder(resp.Body).Decode(&out)
 }
 
@@ -177,25 +173,38 @@ func (c *Client) DeleteBinding(ctx context.Context, id string) error {
 }
 
 // CreateRecording arms or starts a session.
-func (c *Client) CreateRecording(ctx context.Context, action, idem string) (recording.Snapshot, error) {
+func (c *Client) CreateRecording(ctx context.Context, action, idem string) (RecordingSnapshot, error) {
+	return c.CreateRecordingAt(ctx, action, "", "", idem)
+}
+
+// CreateRecordingAt arms or starts a session at an optional create-only WAV
+// target beneath the daemon's recordings directory.
+func (c *Client) CreateRecordingAt(ctx context.Context, action, title, outputPath, idem string) (RecordingSnapshot, error) {
 	headers := map[string]string{}
 	if idem != "" {
 		headers["Idempotency-Key"] = idem
 	}
-	resp, err := c.do(ctx, http.MethodPost, "/v1/recordings", map[string]string{"action": action}, headers)
+	body := map[string]string{"action": action}
+	if title != "" {
+		body["title"] = title
+	}
+	if outputPath != "" {
+		body["output_path"] = outputPath
+	}
+	resp, err := c.do(ctx, http.MethodPost, "/v1/recordings", body, headers)
 	if err != nil {
-		return recording.Snapshot{}, err
+		return RecordingSnapshot{}, err
 	}
 	if resp.StatusCode != 200 {
-		return recording.Snapshot{}, decodeErr(resp)
+		return RecordingSnapshot{}, decodeErr(resp)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var snap recording.Snapshot
+	var snap RecordingSnapshot
 	return snap, json.NewDecoder(resp.Body).Decode(&snap)
 }
 
 // RecordingAction posts start/stop/arm for a session id.
-func (c *Client) RecordingAction(ctx context.Context, id, action, idem string) (recording.Snapshot, error) {
+func (c *Client) RecordingAction(ctx context.Context, id, action, idem string) (RecordingSnapshot, error) {
 	headers := map[string]string{}
 	if idem != "" {
 		headers["Idempotency-Key"] = idem
@@ -203,19 +212,21 @@ func (c *Client) RecordingAction(ctx context.Context, id, action, idem string) (
 	path := "/v1/recordings/" + id + "/actions"
 	resp, err := c.do(ctx, http.MethodPost, path, map[string]string{"action": action}, headers)
 	if err != nil {
-		return recording.Snapshot{}, err
+		return RecordingSnapshot{}, err
 	}
 	if resp.StatusCode != 200 {
-		return recording.Snapshot{}, decodeErr(resp)
+		return RecordingSnapshot{}, decodeErr(resp)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var snap recording.Snapshot
+	var snap RecordingSnapshot
 	return snap, json.NewDecoder(resp.Body).Decode(&snap)
 }
 
 // Events streams events from cursor (exclusive). Caller must cancel ctx.
-func (c *Client) Events(ctx context.Context, cursor event.Sequence) (<-chan event.Envelope, <-chan error) {
-	out := make(chan event.Envelope, 8)
+// The stream surfaces protocol/transport failures and does not reconnect
+// automatically; callers may resume explicitly from the last Sequence seen.
+func (c *Client) Events(ctx context.Context, cursor Sequence) (<-chan Event, <-chan error) {
+	out := make(chan Event, 8)
 	errs := make(chan error, 1)
 	go func() {
 		defer close(out)
@@ -257,14 +268,16 @@ func (c *Client) Events(ctx context.Context, cursor event.Sequence) (<-chan even
 				dataLines = append(dataLines, strings.TrimPrefix(line, "data: "))
 			}
 			if line == "" && len(dataLines) > 0 {
-				var env event.Envelope
-				if err := json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &env); err == nil {
-					select {
-					case out <- env:
-					case <-ctx.Done():
-						errs <- ctx.Err()
-						return
-					}
+				var env Event
+				if err := json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &env); err != nil {
+					errs <- fmt.Errorf("micbridge event protocol: malformed JSON: %w", err)
+					return
+				}
+				select {
+				case out <- env:
+				case <-ctx.Done():
+					errs <- ctx.Err()
+					return
 				}
 				dataLines = nil
 			}

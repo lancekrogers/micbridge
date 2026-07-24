@@ -1,5 +1,7 @@
 # Dev module — local helpers (no host package installs)
 
+set working-directory := ".."
+
 state_dir := env_var_or_default("MICBRIDGE_STATE_DIR", ".micbridge")
 bin_dir := "bin"
 binary_name := "micbridge"
@@ -18,12 +20,11 @@ print-state:
     @echo "recordings: {{state_dir}}/recordings"
     @echo "journals:   {{state_dir}}/journals"
 
-# Hardware lab helpers are opt-in and named explicitly (not implemented yet).
-[doc('Placeholder: requires attached Hollyland 3547:0007 — not for CI')]
+# Hardware lab helper is opt-in and never part of the ordinary test target.
+[doc('Requires one attached Hollyland 3547:0007 — not for normal CI')]
 hil-smoke:
-    @echo "xdev::hil-smoke is intentionally unimplemented in bootstrap"
-    @echo "Attach hardware and use phase 004 recipes when available"
-    @exit 1
+    MICBRIDGE_HIL=1 go test ./internal/driver/hollyland35470007 \
+      -run '^TestOptInLiveDiscoveryMatchesProfile$' -count=1 -v
 
 [private]
 ensure-bin:

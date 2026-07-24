@@ -15,6 +15,9 @@ type Policy struct {
 	DisconnectGrace time.Duration
 	// AllowReconnectSameID permits resume only for the same SourceID.
 	AllowReconnectSameID bool
+	// FreeBytes overrides filesystem-space measurement for unusual filesystems
+	// and deterministic fault tests. Nil selects the platform implementation.
+	FreeBytes func(path string) (uint64, error)
 }
 
 // DefaultPolicy returns conservative defaults.
@@ -48,7 +51,11 @@ func (p Policy) CheckArm() error {
 		return &LimitError{Code: "output_root", Message: err.Error()}
 	}
 	if p.MinFreeBytes > 0 {
-		free, err := freeBytes(clean)
+		measure := p.FreeBytes
+		if measure == nil {
+			measure = freeBytes
+		}
+		free, err := measure(clean)
 		if err != nil {
 			// best-effort; do not fail arm if FS stats unavailable
 			return nil

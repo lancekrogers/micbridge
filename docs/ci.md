@@ -15,13 +15,14 @@ and uses the same `just` recipes as local development:
 5. `just build`
 6. `just demo`
 7. `just review` — lint + race
-8. Assert HIL smoke remains opt-in (must not pass as a required gate without
+8. Run parser fuzz-smoke targets.
+9. Build a deterministic local Linux/amd64 package candidate.
+10. Assert HIL smoke remains opt-in (must not pass as a required gate without
    hardware).
 
 ## Pinning and cache
 
-- Actions are version-pinned (e.g. `actions/checkout@v4.2.2`,
-  `actions/setup-go@v5.4.0`).
+- Actions are pinned to immutable commit SHAs with audited version comments.
 - Go module cache uses `actions/setup-go` cache keyed from `go.mod` /
   `go.sum`.
 - No secrets, audio fixtures, or hardware runners are required.
@@ -38,12 +39,13 @@ just test-race
 just review
 ```
 
-If `golangci-lint` is missing locally, `just review` falls back to `go vet`;
-install the same major version CI uses for parity:
+CI installs and requires exactly `golangci-lint v1.64.8`. Locally,
+`just review` falls back to `go vet` unless `MICBRIDGE_REQUIRE_LINT=1`; install
+the exact CI version for parity:
 
 ```bash
-# example — match host tooling when possible
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+MICBRIDGE_REQUIRE_LINT=1 just review
 ```
 
 ## Native / CGO notes

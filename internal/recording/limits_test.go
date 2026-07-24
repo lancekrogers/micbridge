@@ -2,6 +2,8 @@ package recording_test
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -51,31 +53,40 @@ func TestSourceLossNoSubstitution(t *testing.T) {
 
 func TestDiskFullInjection(t *testing.T) {
 	dir := t.TempDir()
-	p := recording.Policy{OutputRoot: dir, MinFreeBytes: 1 << 62} // absurd requirement
+	p := recording.Policy{
+		OutputRoot: dir, MinFreeBytes: 1024,
+		FreeBytes: func(string) (uint64, error) { return 512, nil },
+	}
 	err := p.CheckArm()
 	if err == nil {
-		// freeBytesFallback may report huge free — force via tiny root unwritable
-		t.Skip("host reports huge free space; freeBytes path may use fallback")
+		t.Fatal("expected deterministic disk-space failure")
 	}
 	var le *recording.LimitError
 	if !errors.As(err, &le) || le.Code != "disk_space" {
-		// On linux Statfs should trip
-		if err != nil {
-			t.Log(err)
-		}
+		t.Fatalf("want disk_space LimitError, got %T: %v", err, err)
 	}
 }
 
-func TestPermissionLossOnWrite(t *testing.T) {
+func TestFreeSpaceProbeFailureDoesNotInventDiskFull(t *testing.T) {
 	dir := t.TempDir()
-	rec := filepath.Join(dir, "recordings")
-	fmt := recording.WAVFormat{SampleRate: 48000, Channels: 1, BitsPerSample: 16}
-	w, err := recording.CreateWAV(rec, "perm", fmt)
-	if err != nil {
+	p := recording.Policy{
+		OutputRoot: dir, MinFreeBytes: 1024,
+		FreeBytes: func(string) (uint64, error) { return 0, fmt.Errorf("unsupported filesystem") },
+	}
+	if err := p.CheckArm(); err != nil {
+		t.Fatalf("best-effort probe should not invent disk full: %v", err)
+	}
+}
+
+func TestOutputRootFailureIsActionable(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(root, []byte("occupied"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_ = w.Abort()
-	// simulate unrecoverable write by removing partial mid-session — recovery should see none/partial
-	out, _, _ := recording.RecoverSession(rec, filepath.Join(dir, "journals"), "perm")
-	_ = out
+	p := recording.DefaultPolicy(filepath.Join(root, "recordings"))
+	err := p.CheckArm()
+	var limitErr *recording.LimitError
+	if !errors.As(err, &limitErr) || limitErr.Code != "output_root" {
+		t.Fatalf("want output_root LimitError, got %T: %v", err, err)
+	}
 }

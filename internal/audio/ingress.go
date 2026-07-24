@@ -21,7 +21,8 @@ type IngressPolicy int
 const (
 	// PolicyDropNewest rejects frames when full (default for capture health).
 	PolicyDropNewest IngressPolicy = iota
-	// PolicyDropOldest discards the oldest queued frame to accept the new one.
+	// PolicyDropOldest is reserved. It is rejected by NewIngress because a
+	// lock-free SPSC producer cannot safely advance the consumer-owned head.
 	PolicyDropOldest
 )
 
@@ -55,6 +56,9 @@ func NewIngress(capacity, frameBytes int, policy IngressPolicy) (*Ingress, error
 	if capacity < 1 || frameBytes < 1 {
 		return nil, fmt.Errorf("audio: ingress capacity and frameBytes must be positive")
 	}
+	if policy != PolicyDropNewest {
+		return nil, fmt.Errorf("audio: ingress policy %d is not safe for SPSC callback ownership", policy)
+	}
 	in := &Ingress{
 		slots:   make([][]byte, capacity),
 		metaSeq: make([]uint64, capacity),
@@ -75,32 +79,26 @@ func (in *Ingress) PushFromCallback(pcm []byte, ts int64) bool {
 	if in.closed.Load() == 1 {
 		return false
 	}
-	if len(pcm) > in.frameB {
-		pcm = pcm[:in.frameB]
+	if len(pcm) != in.frameB {
+		in.drop.Add(1)
+		return false
 	}
-	for {
-		head := in.head.Load()
-		tail := in.tail.Load()
-		size := tail - head
-		if size >= in.cap {
-			in.drop.Add(1)
-			if in.policy == PolicyDropOldest {
-				// Advance head once to drop oldest (SPSC: producer may help drop).
-				in.head.CompareAndSwap(head, head+1)
-				continue
-			}
-			return false
-		}
-		idx := tail % in.cap
-		n := copy(in.slots[idx], pcm)
-		seq := in.seq.Add(1)
-		in.metaSeq[idx] = seq
-		in.metaTs[idx] = ts
-		in.metaN[idx] = int32(n)
-		// Publish slot.
-		in.tail.Store(tail + 1)
-		return true
+	head := in.head.Load()
+	tail := in.tail.Load()
+	size := tail - head
+	if size >= in.cap {
+		in.drop.Add(1)
+		return false
 	}
+	idx := tail % in.cap
+	n := copy(in.slots[idx], pcm)
+	seq := in.seq.Add(1)
+	in.metaSeq[idx] = seq
+	in.metaTs[idx] = ts
+	in.metaN[idx] = int32(n)
+	// Publish slot.
+	in.tail.Store(tail + 1)
+	return true
 }
 
 // OverflowCount is the number of overflow decisions.
@@ -142,12 +140,12 @@ func (in *Ingress) Close() { in.closed.Store(1) }
 // DrainWorker pulls frames until ctx done and ring drained after close.
 func DrainWorker(ctx context.Context, in *Ingress, handle func(Frame)) {
 	for {
-		if err := ctx.Err(); err != nil {
-			return
-		}
 		fr, ok := in.Pop()
 		if !ok {
 			if in.closed.Load() == 1 {
+				return
+			}
+			if err := ctx.Err(); err != nil {
 				return
 			}
 			runtime.Gosched()

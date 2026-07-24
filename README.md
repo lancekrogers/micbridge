@@ -8,8 +8,11 @@ sessions. The first evidence-backed driver targets Hollyland USB **`3547:0007`**
 on Linux. The product contract stays generic—no Habitat runtime dependency and
 no Samantha-specific schema.
 
-**Status:** repository bootstrap (v0.0.0-dev). Fake/status paths work without
-hardware; native capture and the Hollyland driver land in later phases.
+**Status:** v0.1 review candidate (`v0.0.0-dev`, not released). The daemon
+discovers the exact Linux receiver, groups USB Audio and evdev control, opens
+an explicit malgo source, records create-only WAVs, exposes API/CLI/SDK
+workflows, and provides an interactive TUI. Hardware-free mode is explicit
+(`MICBRIDGE_FAKE=1`). Final receiver-button HIL remains a release gate.
 
 ## Supported host (v0.1 focus)
 
@@ -18,9 +21,9 @@ hardware; native capture and the Hollyland driver land in later phases.
 | OS | **Linux** (primary; CI on Ubuntu 24.04) |
 | Go | version in `go.mod` (**1.26+**) |
 | Task runner | [just](https://github.com/casey/just) |
-| Audio (upcoming) | miniaudio via `gen2brain/malgo` (cgo) |
-| Control (upcoming) | Linux evdev under USB parent grouping |
-| Transport (upcoming) | per-user Unix socket under `$XDG_RUNTIME_DIR` |
+| Audio | miniaudio via `gen2brain/malgo` (cgo) |
+| Control | Linux evdev under exact USB-parent grouping |
+| Transport | per-user Unix socket under `$XDG_RUNTIME_DIR` |
 
 macOS/Windows schemas may appear early; support is claimed only after
 platform-specific evidence.
@@ -85,7 +88,7 @@ MICBRIDGE_STATE_DIR=$(mktemp -d) ./bin/micbridge status
 | `just build` | Build `bin/micbridge` |
 | `just check` | Format gate + vet + unit tests |
 | `just test` / `just test-race` | Tests (hardware-free) |
-| `just demo` | Fake status demo in a temp state dir |
+| `just demo` | Complete fake-daemon status smoke in a temp state dir |
 | `just review` | Lint + race (CI review gate) |
 | `just install` | Install to `GOBIN` |
 
@@ -97,8 +100,17 @@ CI runs the same recipes. Details: [docs/ci.md](docs/ci.md).
 |---|---|---|
 | `micbridge version` / `status` | No | Bootstrap shells; temp or `MICBRIDGE_STATE_DIR` |
 | Unit / race tests | No | Deterministic clocks, IDs, synthetic PCM |
-| Native audio capture tests | No device, later cgo | Phase 003; uses malgo + synthetic sinks |
-| Physical Hollyland two-press | **Yes** | Phase 004+; opt-in `just xdev hil-*` only |
+| Native audio capture | Receiver for live path | Explicit selected source; no default-mic fallback |
+| Physical Hollyland two-press | **Yes** | Bounded final HIL; not part of normal CI |
+
+Start the deterministic hardware-free daemon with:
+
+```bash
+MICBRIDGE_FAKE=1 micbridge serve
+```
+
+With the receiver attached, omit `MICBRIDGE_FAKE`; physical mode is the
+default. Run `micbridge ui` for the interactive recorder.
 
 Never wire HIL into `just check`. Physical validation is bounded and optional.
 

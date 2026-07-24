@@ -9,6 +9,7 @@ import (
 	"github.com/lancekrogers/micbridge/internal/driver/fake"
 	"github.com/lancekrogers/micbridge/internal/recording"
 	"github.com/lancekrogers/micbridge/internal/ux"
+	"github.com/lancekrogers/micbridge/pkg/client"
 )
 
 func TestGuidedSetupFakeDevice(t *testing.T) {
@@ -27,7 +28,21 @@ func TestGuidedSetupFakeDevice(t *testing.T) {
 				SideEffects: []core.SideEffect{{ID: "host.volume_increment", Passive: true}}},
 		},
 	}
-	plan := ux.BuildSetupPlan(dev)
+	plan := ux.BuildSetupPlan(client.Device{
+		Schema: client.DeviceSchema,
+		Identity: client.Identity{
+			Schema: client.IdentitySchema, DeviceID: "dev_fake_1",
+			DriverID: fake.DriverID, DriverVersion: fake.DriverVersion,
+			DisplayName: "Fake Microphone",
+		},
+		Capabilities: []client.Capability{
+			{Schema: client.CapabilitySchema, Key: client.CapAudioCapture, Availability: client.Available,
+				Evidence: client.Evidence{Level: client.EvidenceMeasured, Summary: "fake"}},
+			{Schema: client.CapabilitySchema, Key: client.CapControlPress, Availability: client.Available,
+				Evidence:    client.Evidence{Level: client.EvidenceMeasured, Summary: "fake"},
+				SideEffects: []client.SideEffect{{ID: "host.volume_increment", Passive: true}}},
+		},
+	})
 	if len(plan.Steps) < 4 {
 		t.Fatal(plan.Steps)
 	}
@@ -44,12 +59,12 @@ func TestGuidedSetupFakeDevice(t *testing.T) {
 }
 
 func TestSetupBlockedWhenUnsupported(t *testing.T) {
-	dev := core.Device{
-		Schema:   core.DeviceSchema,
-		Identity: core.Identity{Schema: core.IdentitySchema, DeviceID: "dev_x", DriverID: "x", DriverVersion: "1"},
-		Capabilities: []core.Capability{{
-			Schema: core.CapabilitySchema, Key: core.CapAudioCapture, Availability: core.Unavailable,
-			UnavailableReason: "denied", Evidence: core.Evidence{Level: core.EvidenceMeasured},
+	dev := client.Device{
+		Schema:   client.DeviceSchema,
+		Identity: client.Identity{Schema: client.IdentitySchema, DeviceID: "dev_x", DriverID: "x", DriverVersion: "1"},
+		Capabilities: []client.Capability{{
+			Schema: client.CapabilitySchema, Key: client.CapAudioCapture, Availability: client.Unavailable,
+			UnavailableReason: "denied", Evidence: client.Evidence{Level: client.EvidenceMeasured},
 		}},
 	}
 	plan := ux.BuildSetupPlan(dev)

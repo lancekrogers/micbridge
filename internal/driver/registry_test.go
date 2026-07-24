@@ -3,6 +3,7 @@ package driver_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/lancekrogers/micbridge/internal/driver"
@@ -34,3 +35,29 @@ type aliasDriver struct {
 }
 
 func (a *aliasDriver) ID() string { return a.id }
+
+type wrappedNoMatchDriver struct {
+	*fake.Driver
+}
+
+func (d *wrappedNoMatchDriver) ID() string { return "wrapped-no-match" }
+func (d *wrappedNoMatchDriver) Match(context.Context, driver.Candidate) (driver.Match, error) {
+	return driver.Match{}, fmt.Errorf("candidate rejected: %w", driver.ErrNoMatch)
+}
+
+func TestWrappedNoMatchDoesNotAbortSelection(t *testing.T) {
+	reg := driver.NewRegistry()
+	if err := reg.Register(&wrappedNoMatchDriver{Driver: fake.New()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Register(fake.New()); err != nil {
+		t.Fatal(err)
+	}
+	_, selected, err := reg.Select(context.Background(), driver.Candidate{Attributes: map[string]string{"profile": "fake"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ID() != fake.DriverID {
+		t.Fatalf("selected=%s", selected.ID())
+	}
+}
