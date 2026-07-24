@@ -53,9 +53,9 @@ bootstrap:
 
 # Build the micbridge binary into bin/.
 build:
-    mkdir -p {{bin_dir}}
-    go build -ldflags="-X github.com/lancekrogers/micbridge/internal/core.Version={{version}}" -o {{bin_dir}}/{{binary_name}} {{cmd_pkg}}
-    @echo "built {{bin_dir}}/{{binary_name}}"
+    mkdir -p {{ bin_dir }}
+    go build -ldflags="-X github.com/lancekrogers/micbridge/internal/core.Version={{ version }}" -o {{ bin_dir }}/{{ binary_name }} {{ cmd_pkg }}
+    @echo "built {{ bin_dir }}/{{ binary_name }}"
 
 # Format-check, vet, and unit tests (CI-friendly gate).
 check: _fmt-check _vet test
@@ -71,9 +71,9 @@ test-race:
 
 # Install the binary into GOBIN (or GOPATH/bin).
 install: build
-    install -d "{{gobin}}"
-    install -m 755 "{{bin_dir}}/{{binary_name}}" "{{gobin}}/{{binary_name}}"
-    @echo "installed {{gobin}}/{{binary_name}}"
+    install -d "{{ gobin }}"
+    install -m 755 "{{ bin_dir }}/{{ binary_name }}" "{{ gobin }}/{{ binary_name }}"
+    @echo "installed {{ gobin }}/{{ binary_name }}"
 
 # Smoke demo: build, print version, status against a temporary state directory.
 demo: build
@@ -91,9 +91,9 @@ demo: build
     }
     trap cleanup EXIT
     echo "demo: state_dir=$tmp"
-    MICBRIDGE_STATE_DIR="$tmp" "./{{bin_dir}}/{{binary_name}}" version
+    MICBRIDGE_STATE_DIR="$tmp" "./{{ bin_dir }}/{{ binary_name }}" version
     MICBRIDGE_FAKE=1 MICBRIDGE_STATE_DIR="$tmp" MICBRIDGE_SOCK="$sock" \
-      "./{{bin_dir}}/{{binary_name}}" serve --json >"$tmp/server.log" 2>&1 &
+      "./{{ bin_dir }}/{{ binary_name }}" serve --json >"$tmp/server.log" 2>&1 &
     server_pid=$!
     for _ in $(seq 1 100); do
       [[ -S "$sock" ]] && break
@@ -105,7 +105,7 @@ demo: build
     done
     [[ -S "$sock" ]] || { cat "$tmp/server.log"; echo "demo: socket was not ready"; exit 1; }
     MICBRIDGE_STATE_DIR="$tmp" MICBRIDGE_SOCK="$sock" \
-      "./{{bin_dir}}/{{binary_name}}" status --json
+      "./{{ bin_dir }}/{{ binary_name }}" status --json
 
 # Static analysis + race tests for review gates.
 review: _fmt-check _vet _lint test-race

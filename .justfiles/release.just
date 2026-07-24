@@ -13,8 +13,8 @@ install-bin:
 
 # Print release metadata that would be stamped (does not tag or push).
 info:
-    @echo "binary={{binary_name}}"
-    @echo "version={{version}}"
+    @echo "binary={{ binary_name }}"
+    @echo "version={{ version }}"
     @echo "module=$(go list -m)"
     @echo "go=$(go env GOVERSION)"
     @echo "NOTE: do not publish a release/tag unless a festival task authorizes it"
@@ -29,8 +29,8 @@ package-candidate:
       echo "package-candidate: Linux/amd64 host required for the native CGO candidate"
       exit 1
     fi
-    if [[ ! "{{version}}" =~ ^[0-9A-Za-z._-]+$ ]]; then
-      echo "package-candidate: invalid VERSION={{version}}"
+    if [[ ! "{{ version }}" =~ ^[0-9A-Za-z._-]+$ ]]; then
+      echo "package-candidate: invalid VERSION={{ version }}"
       exit 1
     fi
     if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
@@ -42,16 +42,16 @@ package-candidate:
     stage="$(mktemp -d "${TMPDIR:-/tmp}/micbridge-package.XXXXXX")"
     cleanup() { rm -rf "$stage"; }
     trap cleanup EXIT
-    package="micbridge_{{version}}_linux_amd64"
+    package="micbridge_{{ version }}_linux_amd64"
     mkdir -p "$dist" "$stage/$package"
     commit="$(git rev-parse --verify HEAD)"
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
       -trimpath -buildvcs=false \
-      -ldflags="-s -w -X github.com/lancekrogers/micbridge/internal/core.Version={{version}}" \
+      -ldflags="-s -w -X github.com/lancekrogers/micbridge/internal/core.Version={{ version }}" \
       -o "$stage/$package/micbridge" ./cmd/micbridge
     {
       echo "name=micbridge"
-      echo "version={{version}}"
+      echo "version={{ version }}"
       echo "target=linux/amd64"
       echo "commit=$commit"
       echo "go=$(go env GOVERSION)"
