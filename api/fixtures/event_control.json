@@ -1,0 +1,17 @@
+{
+  "schema": "micbridge.event/v1",
+  "event_id": "evt_fixture_1",
+  "sequence": 42,
+  "time": "2026-07-24T16:10:12.345678Z",
+  "monotonic_offset_ns": 3489203342,
+  "type": "control.pressed",
+  "device_id": "dev_fixture_receiver",
+  "session_id": "rec_fixture_1",
+  "data": {
+    "control": "primary",
+    "press_id": "press_fixture_1",
+    "side_effects": [
+      "host.volume_increment"
+    ]
+  }
+}

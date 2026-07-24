@@ -1,0 +1,7 @@
+{
+  "schema": "micbridge.status/v1",
+  "name": "micbridge",
+  "version": "0.0.0-dev",
+  "healthy": true,
+  "state_dir": "/tmp/micbridge-state"
+}

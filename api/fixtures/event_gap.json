@@ -1,0 +1,12 @@
+{
+  "schema": "micbridge.event/v1",
+  "event_id": "evt_gap_1",
+  "sequence": 100,
+  "time": "2026-07-24T16:11:00Z",
+  "type": "stream.gap",
+  "data": {
+    "from_sequence": 90,
+    "to_sequence": 99,
+    "reason": "subscriber_overflow"
+  }
+}

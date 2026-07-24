@@ -1,0 +1,13 @@
+{
+  "schema": "micbridge.binding/v1",
+  "id": "bind_primary_toggle",
+  "device_id": "dev_fixture_receiver",
+  "control": "primary",
+  "on": "pressed",
+  "action": "recording.toggle",
+  "debounce_ms": 50,
+  "enabled": true,
+  "side_effects": [
+    "host.volume_increment"
+  ]
+}

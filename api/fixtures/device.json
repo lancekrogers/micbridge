@@ -1,0 +1,79 @@
+{
+  "schema": "micbridge.device/v1",
+  "identity": {
+    "schema": "micbridge.identity/v1",
+    "device_id": "dev_fixture_receiver",
+    "driver_id": "example-driver",
+    "driver_version": "1.0.0",
+    "display_name": "Example Receiver",
+    "attributes": {
+      "usb_vid_pid": "0000:0000"
+    }
+  },
+  "connection_id": "conn_fixture_1",
+  "surfaces": [
+    {
+      "id": "audio0",
+      "kind": "audio.capture",
+      "label": "Capture",
+      "transient_path": "pcmC2D0c"
+    },
+    {
+      "id": "ctrl0",
+      "kind": "control",
+      "label": "Primary",
+      "transient_path": "event7"
+    }
+  ],
+  "capabilities": [
+    {
+      "schema": "micbridge.capability/v1",
+      "key": "audio.capture",
+      "availability": "available",
+      "evidence": {
+        "level": "measured",
+        "summary": "2ch 48kHz enumerated"
+      },
+      "driver_version": "1.0.0"
+    },
+    {
+      "schema": "micbridge.capability/v1",
+      "key": "control.press",
+      "availability": "available",
+      "evidence": {
+        "level": "measured",
+        "summary": "press/release observed"
+      },
+      "side_effects": [
+        {
+          "id": "host.volume_increment",
+          "description": "passive host volume up",
+          "passive": true
+        }
+      ],
+      "driver_version": "1.0.0"
+    },
+    {
+      "schema": "micbridge.capability/v1",
+      "key": "setting.noise_cancellation",
+      "availability": "unsupported",
+      "unavailable_reason": "no host-visible control",
+      "evidence": {
+        "level": "measured_negative",
+        "summary": "bounded trial found no signal"
+      },
+      "driver_version": "1.0.0"
+    },
+    {
+      "schema": "micbridge.capability/v1",
+      "key": "status.battery",
+      "availability": "unverified",
+      "unavailable_reason": "candidate field only",
+      "evidence": {
+        "level": "candidate",
+        "summary": "unisolated vendor observation"
+      },
+      "driver_version": "1.0.0"
+    }
+  ]
+}

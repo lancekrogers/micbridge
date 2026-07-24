@@ -1,0 +1,5 @@
+{
+  "error": "output path escapes state root",
+  "code": "path_error",
+  "request_id": "req_fixture_1"
+}
