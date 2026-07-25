@@ -101,3 +101,42 @@ func TestIngressCleanShutdown(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestIngressRejectsUnsafeDropOldestAndWrongFrameSizes(t *testing.T) {
+	if _, err := audio.NewIngress(2, 16, audio.PolicyDropOldest); err == nil {
+		t.Fatal("expected unsafe drop-oldest policy rejection")
+	}
+	in, err := audio.NewIngress(2, 16, audio.PolicyDropNewest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.PushFromCallback(make([]byte, 15), 1) {
+		t.Fatal("accepted short frame")
+	}
+	if in.PushFromCallback(make([]byte, 17), 2) {
+		t.Fatal("accepted oversized frame")
+	}
+	if got := in.OverflowCount(); got != 2 {
+		t.Fatalf("integrity rejects=%d", got)
+	}
+}
+
+func TestDrainWorkerDrainsEveryAcceptedFrameAfterCloseAndCancel(t *testing.T) {
+	in, err := audio.NewIngress(8, 16, audio.PolicyDropNewest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 8; i++ {
+		if !in.PushFromCallback(make([]byte, 16), int64(i)) {
+			t.Fatalf("push %d", i)
+		}
+	}
+	in.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var drained atomic.Uint64
+	audio.DrainWorker(ctx, in, func(audio.Frame) { drained.Add(1) })
+	if got := drained.Load(); got != 8 {
+		t.Fatalf("drained %d accepted frames", got)
+	}
+}

@@ -127,20 +127,30 @@ func (b *Bus) fanoutLocked(env Envelope) {
 		case sub.ch <- env:
 			sub.cursor = env.Sequence
 		default:
-			// Drop one pending message (if any) to make room for an explicit gap.
+			// Drop one pending message to make room for an explicit gap. Merge a
+			// previously queued gap so repeated overflow preserves the complete
+			// missing range.
+			from, to := env.Sequence, env.Sequence
 			select {
-			case <-sub.ch:
+			case dropped := <-sub.ch:
+				droppedFrom, droppedTo := envelopeRange(dropped)
+				if droppedFrom < from {
+					from = droppedFrom
+				}
+				if droppedTo > to {
+					to = droppedTo
+				}
 			default:
 			}
 			gap := Envelope{
 				Schema:   "micbridge.event/v1",
 				EventID:  b.ids.Next("evt"),
-				Sequence: env.Sequence,
+				Sequence: to,
 				Time:     env.Time,
 				Type:     TypeStreamGap,
 				Data: map[string]any{
-					"from_sequence": env.Sequence,
-					"to_sequence":   env.Sequence,
+					"from_sequence": from,
+					"to_sequence":   to,
 					"reason":        "subscriber_overflow",
 				},
 			}
@@ -148,11 +158,41 @@ func (b *Bus) fanoutLocked(env Envelope) {
 			case sub.ch <- gap:
 				sub.cursor = env.Sequence
 			default:
-				// Still blocked: advance cursor so reconnect can request replay.
-				sub.cursor = env.Sequence
+				// This cannot happen after removing one item from the same
+				// bounded channel while holding the bus lock.
 			}
 		}
 	}
+}
+
+func envelopeRange(env Envelope) (Sequence, Sequence) {
+	if env.Type != TypeStreamGap {
+		return env.Sequence, env.Sequence
+	}
+	from, fromOK := sequenceData(env.Data["from_sequence"])
+	to, toOK := sequenceData(env.Data["to_sequence"])
+	if !fromOK || !toOK || from > to {
+		return env.Sequence, env.Sequence
+	}
+	return from, to
+}
+
+func sequenceData(v any) (Sequence, bool) {
+	switch n := v.(type) {
+	case Sequence:
+		return n, true
+	case uint64:
+		return Sequence(n), true
+	case int:
+		if n >= 0 {
+			return Sequence(n), true
+		}
+	case float64:
+		if n >= 0 {
+			return Sequence(n), true
+		}
+	}
+	return 0, false
 }
 
 // Subscribe attaches a subscriber with bounded buffer.
@@ -203,24 +243,36 @@ func (b *Bus) Subscribe(buffer int, from Sequence) (<-chan Envelope, func(), err
 			case ch <- env:
 				sub.cursor = env.Sequence
 			default:
-				// Buffer full during replay: emit one gap and stop replay.
+				// Buffer full during replay. Replace all queued replay data with
+				// one exact gap so the loss notification itself cannot be lost.
+				firstMissing := env.Sequence
+				for {
+					select {
+					case dropped := <-ch:
+						droppedFrom, _ := envelopeRange(dropped)
+						if droppedFrom < firstMissing {
+							firstMissing = droppedFrom
+						}
+					default:
+						goto replayDrained
+					}
+				}
+			replayDrained:
+				lastMissing := b.log[(b.head+b.logLen-1)%b.logCap].Sequence
 				gap := Envelope{
 					Schema:   "micbridge.event/v1",
 					EventID:  b.ids.Next("evt"),
-					Sequence: env.Sequence,
+					Sequence: lastMissing,
 					Time:     env.Time,
 					Type:     TypeStreamGap,
 					Data: map[string]any{
-						"from_sequence": env.Sequence,
-						"to_sequence":   b.log[(b.head+b.logLen-1)%b.logCap].Sequence,
+						"from_sequence": firstMissing,
+						"to_sequence":   lastMissing,
 						"reason":        "replay_overflow",
 					},
 				}
-				select {
-				case ch <- gap:
-					sub.cursor = gap.Sequence
-				default:
-				}
+				ch <- gap
+				sub.cursor = gap.Sequence
 				break replay
 			}
 		}

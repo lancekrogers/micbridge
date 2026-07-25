@@ -197,6 +197,27 @@ func TestEventsCancellationNoLeak(t *testing.T) {
 	t.Fatalf("goroutine leak? before=%d after=%d", before, runtime.NumGoroutine())
 }
 
+func TestCloseOwnsFakeEventCancellation(t *testing.T) {
+	d := fake.New(fake.WithScenario(fake.Scenario{DeviceID: "dev_close"}))
+	m, _ := d.Match(context.Background(), driver.Candidate{Attributes: map[string]string{"profile": "fake"}})
+	dev, _ := d.Open(context.Background(), m, driver.Candidate{Attributes: map[string]string{"profile": "fake"}})
+	ch, err := dev.Events(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dev.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("event stream remained open")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close did not cancel event stream")
+	}
+}
+
 func TestDuplicateRegister(t *testing.T) {
 	reg := driver.NewRegistry()
 	d := fake.New()

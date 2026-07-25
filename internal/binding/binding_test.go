@@ -1,6 +1,7 @@
 package binding_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -144,5 +145,46 @@ func TestUnknownActionRejected(t *testing.T) {
 	}, nil)
 	if err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestOverlappingBindingsChooseStableLowestID(t *testing.T) {
+	eng := binding.New(nil, "")
+	for _, id := range []binding.ID{"z_last", "a_first"} {
+		_, err := eng.Upsert(binding.Binding{
+			Schema: binding.Schema, ID: id, DeviceID: "dev_1",
+			Control: "primary", On: "pressed", Action: binding.ActionRecordingToggle, Enabled: true,
+		}, capsCallable())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	decision, command := eng.Handle(binding.ControlInput{
+		DeviceID: "dev_1", Type: "pressed", Control: "primary", PressID: "stable",
+	})
+	if command == nil || decision.BindingID != "a_first" {
+		t.Fatalf("decision=%+v command=%+v", decision, command)
+	}
+}
+
+func TestPressDedupeRetentionIsBounded(t *testing.T) {
+	clk := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	eng := binding.New(clk, "")
+	_, err := eng.Upsert(binding.Binding{
+		Schema: binding.Schema, ID: "bounded", DeviceID: "dev_1",
+		Control: "primary", On: "pressed", Action: binding.ActionRecordingToggle, Enabled: true,
+	}, capsCallable())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5000; i++ {
+		_, _ = eng.Handle(binding.ControlInput{
+			DeviceID: "dev_1", Type: "pressed", Control: "primary",
+			PressID: fmt.Sprintf("press-%d", i), At: clk.Now(),
+		})
+		clk.Advance(time.Millisecond)
+	}
+	if got := eng.DedupeEntries(); got > 4096 {
+		t.Fatalf("dedupe entries=%d", got)
 	}
 }

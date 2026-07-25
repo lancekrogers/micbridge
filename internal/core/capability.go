@@ -58,6 +58,32 @@ type Evidence struct {
 	Extra          map[string]any `json:"-"`
 }
 
+// MarshalJSON preserves unknown evidence fields.
+func (e Evidence) MarshalJSON() ([]byte, error) {
+	type alias Evidence
+	base, err := json.Marshal(alias(e))
+	if err != nil {
+		return nil, err
+	}
+	return mergeExtra(base, e.Extra)
+}
+
+// UnmarshalJSON captures unknown evidence fields.
+func (e *Evidence) UnmarshalJSON(data []byte) error {
+	type alias Evidence
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*e = Evidence(decoded)
+	extra, err := extractExtra(data, []string{"level", "summary", "profile_version", "artifact_digest"})
+	if err != nil {
+		return err
+	}
+	e.Extra = extra
+	return nil
+}
+
 // SideEffect declares a known host or device side effect of using a capability.
 type SideEffect struct {
 	ID          string `json:"id"`

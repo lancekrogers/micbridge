@@ -43,9 +43,14 @@ Results:
   queue length stays ≤ capacity; `-race` clean after SPSC rewrite.
 - `TestIngressCleanShutdown` — worker exits after close/cancel.
 - Health tests inject stalls/gaps/disconnect and assert level transitions.
+- `OpenNativeCapture` copies fixed 480-frame S16 chunks into the same ingress;
+  all WAV/file work runs on the drain worker.
+- A bounded ordinary-user run against the attached `3547:0007` source
+  negotiated native 48 kHz/stereo/24-bit input to requested 16-bit PCM and
+  produced a validated 67,244-byte WAV.
 
-No reproducible deadline miss or frame loss was observed on the minimized
-direct path under these synthetic loads. Therefore a C ring is not justified.
+No reproducible deadline miss or callback drop was observed in synthetic loads
+or the bounded real callback run. Therefore a C ring is not justified.
 
 ## Consequences
 

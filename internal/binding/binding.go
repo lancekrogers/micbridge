@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -106,7 +107,7 @@ type Engine struct {
 	// lastFire[pressKey] = last fire time for debounce
 	lastFire map[string]time.Time
 	// seenPress actions by press_id+binding for idempotency
-	seen map[string]struct{}
+	seen map[string]time.Time
 }
 
 // NewEngine returns an empty binding engine (in-memory only).
@@ -124,7 +125,7 @@ func New(clk clock.Clock, storePath string) *Engine {
 		path:     storePath,
 		bindings: make(map[ID]Binding),
 		lastFire: make(map[string]time.Time),
-		seen:     make(map[string]struct{}),
+		seen:     make(map[string]time.Time),
 	}
 }
 
@@ -211,7 +212,13 @@ func (e *Engine) List() []Binding {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	out := make([]Binding, 0, len(e.bindings))
-	for _, b := range e.bindings {
+	ids := make([]string, 0, len(e.bindings))
+	for id := range e.bindings {
+		ids = append(ids, string(id))
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		b := e.bindings[ID(id)]
 		out = append(out, b)
 	}
 	return out
@@ -225,6 +232,13 @@ func (e *Engine) Get(id ID) (Binding, bool) {
 	return b, ok
 }
 
+// DedupeEntries reports bounded retained press IDs for diagnostics.
+func (e *Engine) DedupeEntries() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.seen)
+}
+
 // Handle evaluates input against bindings and returns at most one command.
 func (e *Engine) Handle(in ControlInput) (Decision, *Command) {
 	e.mu.Lock()
@@ -233,7 +247,13 @@ func (e *Engine) Handle(in ControlInput) (Decision, *Command) {
 	if now.IsZero() {
 		now = e.clk.Now()
 	}
-	for _, b := range e.bindings {
+	ids := make([]string, 0, len(e.bindings))
+	for id := range e.bindings {
+		ids = append(ids, string(id))
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		b := e.bindings[ID(id)]
 		if b.DeviceID != in.DeviceID || b.Control != in.Control || b.On != in.Type {
 			continue
 		}
@@ -256,7 +276,8 @@ func (e *Engine) Handle(in ControlInput) (Decision, *Command) {
 			if _, ok := e.seen[idem]; ok {
 				return Decision{BindingID: b.ID, Action: b.Action, Accepted: false, Reason: "duplicate_press_id"}, nil
 			}
-			e.seen[idem] = struct{}{}
+			e.seen[idem] = now
+			e.pruneSeenLocked(now)
 		}
 		e.lastFire[key] = now
 		cmd := &Command{
@@ -277,6 +298,27 @@ func (e *Engine) Handle(in ControlInput) (Decision, *Command) {
 	return Decision{Accepted: false, Reason: "no_binding"}, nil
 }
 
+func (e *Engine) pruneSeenLocked(now time.Time) {
+	const (
+		maxSeen = 4096
+		horizon = 10 * time.Minute
+	)
+	if len(e.seen) <= maxSeen {
+		return
+	}
+	cutoff := now.Add(-horizon)
+	for key, at := range e.seen {
+		if at.Before(cutoff) || len(e.seen) > maxSeen {
+			delete(e.seen, key)
+		}
+	}
+	for key, at := range e.lastFire {
+		if at.Before(cutoff) {
+			delete(e.lastFire, key)
+		}
+	}
+}
+
 func (e *Engine) persistLocked() error {
 	if e.path == "" {
 		return nil
@@ -286,8 +328,13 @@ func (e *Engine) persistLocked() error {
 		Bindings []Binding `json:"bindings"`
 	}
 	f := file{Schema: Schema}
-	for _, b := range e.bindings {
-		f.Bindings = append(f.Bindings, b)
+	ids := make([]string, 0, len(e.bindings))
+	for id := range e.bindings {
+		ids = append(ids, string(id))
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		f.Bindings = append(f.Bindings, e.bindings[ID(id)])
 	}
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {

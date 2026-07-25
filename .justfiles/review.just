@@ -1,5 +1,7 @@
 # Review module — static analysis for sequence gates
 
+set working-directory := ".."
+
 # Full review gate: format, vet, lint, race.
 all:
     just review

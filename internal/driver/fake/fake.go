@@ -187,6 +187,7 @@ type device struct {
 	mu     sync.Mutex
 	closed bool
 	events chan driver.ControlEvent
+	cancel context.CancelFunc
 }
 
 func (d *device) Identity() core.Identity         { return d.identity }
@@ -224,8 +225,10 @@ func (d *device) Events(ctx context.Context) (<-chan driver.ControlEvent, error)
 		return nil, driver.ErrAlreadyOpen
 	}
 	ch := make(chan driver.ControlEvent, 16)
+	eventCtx, cancel := context.WithCancel(ctx)
 	d.events = ch
-	go d.runScript(ctx, ch)
+	d.cancel = cancel
+	go d.runScript(eventCtx, ch)
 	return ch, nil
 }
 
@@ -263,9 +266,13 @@ func (d *device) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
-		return driver.ErrClosed
+		return nil
 	}
 	d.closed = true
+	if d.cancel != nil {
+		d.cancel()
+		d.cancel = nil
+	}
 	return nil
 }
 

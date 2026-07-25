@@ -1,8 +1,8 @@
 package hollyland35470007
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -24,14 +24,30 @@ func DoctorAccess(audioPath, controlPath string) DoctorReport {
 			r.Hints = append(r.Hints, "connect the 3547:0007 receiver and re-run doctor")
 			return
 		}
-		r.Paths[label] = path
+		if strings.HasPrefix(path, string(os.PathSeparator)) {
+			r.Paths[label] = filepath.Base(path)
+		} else {
+			r.Paths[label] = path
+		}
+		if label == "audio" && !strings.HasPrefix(path, string(os.PathSeparator)) {
+			r.Messages = append(r.Messages, label+": correlated native source")
+			return
+		}
 		fi, err := os.Stat(path)
 		if err != nil {
 			r.OK = false
-			r.Messages = append(r.Messages, fmt.Sprintf("%s: %v", label, err))
+			r.Messages = append(r.Messages, label+": device node is missing or inaccessible")
 			r.Hints = append(r.Hints, "install udev rule that grants the active seat access only to this device node")
 			return
 		}
+		file, openErr := os.Open(path)
+		if openErr != nil {
+			r.OK = false
+			r.Messages = append(r.Messages, label+": ordinary-user open failed")
+			r.Hints = append(r.Hints, "install the device-scoped udev uaccess rule shown by doctor")
+			return
+		}
+		_ = file.Close()
 		// world-writable is a security smell
 		if fi.Mode().Perm()&0o002 != 0 {
 			r.OK = false

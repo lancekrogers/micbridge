@@ -29,9 +29,10 @@ func (m *MalgoEnumerator) List(ctx context.Context) ([]Source, error) {
 		if err != nil {
 			return nil, fmt.Errorf("audio: malgo init: %w", err)
 		}
-		// Free releases the allocated context; Uninit is invoked by Free paths
-		// on this malgo version — only Free to avoid double-teardown crashes.
-		defer ac.Free()
+		defer func() {
+			_ = ac.Uninit()
+			ac.Free()
+		}()
 	}
 	infos, err := ac.Devices(malgo.Capture)
 	if err != nil {
@@ -39,27 +40,54 @@ func (m *MalgoEnumerator) List(ctx context.Context) ([]Source, error) {
 	}
 	out := make([]Source, 0, len(infos))
 	for _, info := range infos {
+		if full, infoErr := ac.DeviceInfo(malgo.Capture, info.ID, malgo.Shared); infoErr == nil {
+			info = full
+		}
 		name := info.Name()
-		id := stableSourceID(name, info.ID.String())
-		// miniaudio may not expose full format lists on all backends; advertise
-		// the measured Hollyland-compatible format as negotiable default probe.
-		formats := []Format{{SampleRate: 48000, Channels: 2, BitsPerSample: 16}}
+		id := stableSourceID(info.ID.String())
+		var nativeFormats, requestedFormats []Format
+		for _, native := range info.Formats {
+			bits := bitsForMalgo(native.Format)
+			if native.SampleRate == 0 || native.Channels == 0 || bits == 0 {
+				continue
+			}
+			nativeFormat := Format{
+				SampleRate: native.SampleRate, Channels: native.Channels, BitsPerSample: bits,
+			}
+			nativeFormats = appendFormat(nativeFormats, nativeFormat)
+			// Miniaudio performs an explicit conversion when the backend can
+			// open the native shape. Keep requested and measured formats
+			// separate instead of claiming every source is natively S16.
+			requestedFormats = appendFormat(requestedFormats, nativeFormat)
+			requestedFormats = appendFormat(requestedFormats, Format{
+				SampleRate: native.SampleRate, Channels: native.Channels, BitsPerSample: 16,
+			})
+		}
 		out = append(out, Source{
 			ID:            id,
 			Name:          name,
 			Backend:       "malgo",
 			TransientHint: info.ID.String(),
-			Formats:       formats,
+			Formats:       requestedFormats,
+			NativeFormats: nativeFormats,
+			IdentityScope: "connection",
 			Available:     true,
 		})
 	}
 	return DedupeNames(out), nil
 }
 
-func stableSourceID(name, nativeID string) SourceID {
+func stableSourceID(nativeID string) SourceID {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(nativeID))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(name))
 	return SourceID("src_" + strconv.FormatUint(h.Sum64(), 16))
+}
+
+func appendFormat(formats []Format, candidate Format) []Format {
+	for _, format := range formats {
+		if format == candidate {
+			return formats
+		}
+	}
+	return append(formats, candidate)
 }

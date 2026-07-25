@@ -70,12 +70,63 @@ func TestIdentityStableAcrossPathChanges(t *testing.T) {
 	if !devA.Identity.EqualStable(devB.Identity) {
 		t.Fatal("stable identity should match across path changes")
 	}
+	devB.Identity.InstallationAlias = "renamed at installation"
+	if !devA.Identity.EqualStable(devB.Identity) {
+		t.Fatal("display alias changed stable physical identity")
+	}
 	if devA.ConnectionID == devB.ConnectionID {
 		t.Fatal("connection ids should differ")
 	}
 	if devA.Surfaces[0].TransientPath == devB.Surfaces[0].TransientPath {
 		t.Fatal("transient paths should differ")
 	}
+}
+
+func TestNestedUnknownFieldsRoundTrip(t *testing.T) {
+	raw := []byte(`{
+		"schema":"micbridge.device/v1",
+		"identity":{"schema":"micbridge.identity/v1","device_id":"dev_nested","driver_id":"d","driver_version":"1"},
+		"surfaces":[{"id":"control","kind":"control","future_surface":{"x":1}}],
+		"capabilities":[{
+			"schema":"micbridge.capability/v1","key":"control.press","availability":"available",
+			"evidence":{"level":"measured","future_evidence":["proof"]}
+		}]
+	}`)
+	var device core.Device
+	if err := json.Unmarshal(raw, &device); err != nil {
+		t.Fatal(err)
+	}
+	if device.Surfaces[0].Extra["future_surface"] == nil ||
+		device.Capabilities[0].Evidence.Extra["future_evidence"] == nil {
+		t.Fatalf("nested extra missing: %+v", device)
+	}
+	out, err := json.Marshal(device)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "future_surface") ||
+		!strings.Contains(string(out), "future_evidence") {
+		t.Fatalf("nested extra lost: %s", out)
+	}
+}
+
+func FuzzDeviceJSONRoundTrip(f *testing.F) {
+	f.Add([]byte(`{"schema":"micbridge.device/v1","identity":{"schema":"micbridge.identity/v1","device_id":"dev_fuzz","driver_id":"fuzz","driver_version":"1"}}`))
+	f.Add([]byte(`{"future":true,"surfaces":[{"future_nested":[1,2,3]}]}`))
+	f.Fuzz(func(t *testing.T, input []byte) {
+		var first core.Device
+		if err := json.Unmarshal(input, &first); err != nil {
+			return
+		}
+		encoded, err := json.Marshal(first)
+		if err != nil {
+			t.Fatalf("marshal accepted device: %v", err)
+		}
+		var second core.Device
+		if err := json.Unmarshal(encoded, &second); err != nil {
+			t.Fatalf("redecode encoded device: %v\n%s", err, encoded)
+		}
+	})
 }
 
 func TestCapabilityAvailabilityDistinctions(t *testing.T) {

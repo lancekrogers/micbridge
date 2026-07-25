@@ -24,6 +24,8 @@ type Source struct {
 	// TransientHint is connection-scoped (card path); never used as identity.
 	TransientHint     string   `json:"transient_hint,omitempty"`
 	Formats           []Format `json:"formats,omitempty"`
+	NativeFormats     []Format `json:"native_formats,omitempty"`
+	IdentityScope     string   `json:"identity_scope,omitempty"`
 	Available         bool     `json:"available"`
 	UnavailableReason string   `json:"unavailable_reason,omitempty"`
 }

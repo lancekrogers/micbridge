@@ -3,6 +3,7 @@ package recording_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -101,6 +102,105 @@ func TestCancelledContext(t *testing.T) {
 	_, err := m.Submit(ctx, recording.Command{Name: recording.CmdArm, Actor: recording.ActorCLI})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestCancellationReachesSinkWithoutLateStateMutation(t *testing.T) {
+	entered := make(chan struct{})
+	sink := &recording.FakeSink{PrepareFn: func(ctx context.Context, _ string) error {
+		close(entered)
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	m := recording.NewMachine(nil, nil, sink, recording.Limits{})
+	defer m.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := m.Submit(ctx, recording.Command{Name: recording.CmdArm, Actor: recording.ActorCLI})
+		result <- err
+	}()
+	<-entered
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for m.Snapshot().State != recording.StateIdle && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := m.Snapshot().State; got != recording.StateIdle {
+		t.Fatalf("late state mutation: %s", got)
+	}
+}
+
+func TestWatchStopRacingTransitionsDoesNotPanic(t *testing.T) {
+	m := recording.NewMachine(nil, nil, &recording.FakeSink{}, recording.Limits{})
+	defer m.Close()
+	for i := 0; i < 1000; i++ {
+		_, stop := m.Watch(1)
+		done := make(chan struct{})
+		go func() {
+			_, _ = m.Submit(context.Background(), recording.Command{Name: recording.CmdReset, Actor: recording.ActorSystem})
+			close(done)
+		}()
+		stop()
+		<-done
+	}
+}
+
+func TestMaximumDurationAutomaticallyFinalizes(t *testing.T) {
+	m := recording.NewMachine(nil, nil, &recording.FakeSink{}, recording.Limits{MaxDuration: 20 * time.Millisecond})
+	defer m.Close()
+	if _, err := m.Submit(context.Background(), recording.Command{Name: recording.CmdStart, Actor: recording.ActorAPI}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for m.Snapshot().State != recording.StateCompleted && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := m.Snapshot(); got.State != recording.StateCompleted || got.Reason != "maximum duration reached" {
+		t.Fatalf("snapshot=%+v", got)
+	}
+}
+
+type stubbornSink struct {
+	entered chan struct{}
+}
+
+func (s *stubbornSink) Prepare(context.Context, string) error {
+	close(s.entered)
+	select {}
+}
+func (*stubbornSink) Start(context.Context, string) error         { return nil }
+func (*stubbornSink) Stop(context.Context, string) error          { return nil }
+func (*stubbornSink) Abort(context.Context, string, string) error { return nil }
+
+func TestCloseContextBoundsMisbehavingSink(t *testing.T) {
+	sink := &stubbornSink{entered: make(chan struct{})}
+	m := recording.NewMachine(nil, nil, sink, recording.Limits{})
+	go func() {
+		_, _ = m.Submit(context.Background(), recording.Command{Name: recording.CmdArm, Actor: recording.ActorCLI})
+	}()
+	<-sink.entered
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := m.CloseContext(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("close error=%v", err)
+	}
+}
+
+func TestMachineIdempotencyRetentionIsBounded(t *testing.T) {
+	m := recording.NewMachine(nil, nil, &recording.FakeSink{}, recording.Limits{})
+	defer m.Close()
+	for i := 0; i < 1200; i++ {
+		_, _ = m.Submit(context.Background(), recording.Command{
+			Name: recording.CmdReset, Actor: recording.ActorSystem,
+			IdempotencyKey: fmt.Sprintf("key-%d", i),
+		})
+	}
+	if got := m.IdempotencyEntries(); got > 1024 {
+		t.Fatalf("idempotency entries=%d", got)
 	}
 }
 

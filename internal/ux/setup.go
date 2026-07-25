@@ -7,6 +7,7 @@ import (
 
 	"github.com/lancekrogers/micbridge/internal/binding"
 	"github.com/lancekrogers/micbridge/internal/core"
+	"github.com/lancekrogers/micbridge/pkg/client"
 )
 
 // SetupStep is one guided decision.
@@ -24,14 +25,14 @@ type SetupStep struct {
 
 // SetupPlan is the guided path from discovery to binding.
 type SetupPlan struct {
-	Device   core.Device      `json:"device"`
-	Steps    []SetupStep      `json:"steps"`
-	Binding  *binding.Binding `json:"binding,omitempty"`
-	Complete bool             `json:"complete"`
+	Device   client.Device   `json:"device"`
+	Steps    []SetupStep     `json:"steps"`
+	Binding  *client.Binding `json:"binding,omitempty"`
+	Complete bool            `json:"complete"`
 }
 
 // BuildSetupPlan creates a one-decision-at-a-time plan for a device.
-func BuildSetupPlan(dev core.Device) SetupPlan {
+func BuildSetupPlan(dev client.Device) SetupPlan {
 	p := SetupPlan{Device: dev}
 	// Step 1: confirm identity
 	p.Steps = append(p.Steps, SetupStep{
@@ -51,10 +52,10 @@ func BuildSetupPlan(dev core.Device) SetupPlan {
 			line += " (" + c.UnavailableReason + ")"
 		}
 		capLines = append(capLines, line)
-		if c.Key == core.CapAudioCapture && c.Callable() {
+		if c.Key == client.CapAudioCapture && c.Callable() {
 			audioOK = true
 		}
-		if c.Key == core.CapControlPress && c.Callable() {
+		if c.Key == client.CapControlPress && c.Callable() {
 			pressOK = true
 		}
 	}
