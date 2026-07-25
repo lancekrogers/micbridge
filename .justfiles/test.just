@@ -19,7 +19,8 @@ cover:
     go test -coverprofile=coverage.out ./...
     go tool cover -func=coverage.out | tail -n 1
 
-# Short parser/contract fuzz gate used by CI.
+# Deterministic parser/contract fuzz gate used by CI. A fixed execution budget
+# avoids wall-clock deadline flakes while still exercising generated inputs.
 fuzz-smoke:
-    go test ./internal/core -run '^$' -fuzz '^FuzzDeviceJSONRoundTrip$' -fuzztime=2s
-    go test ./internal/driver/hollyland35470007 -run '^$' -fuzz '^FuzzEvaluateMatchClassification$' -fuzztime=2s
+    go test ./internal/core -run '^$' -fuzz '^FuzzDeviceJSONRoundTrip$' -fuzztime=100000x
+    go test ./internal/driver/hollyland35470007 -run '^$' -fuzz '^FuzzEvaluateMatchClassification$' -fuzztime=100000x
