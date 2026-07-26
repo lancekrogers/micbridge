@@ -1,5 +1,7 @@
-// Package hollyland35470007 is the exact measured Linux driver for USB 3547:0007.
-// Exact retail model remains unresolved; matching requires VID:PID + descriptor shape.
+// Package hollyland35470007 is the exact measured Linux driver for the
+// Hollyland LARK M2 USB-C receiver at USB 3547:0007. Matching still requires
+// VID:PID plus the measured descriptor shape; brand or model text alone never
+// selects the driver.
 package hollyland35470007
 
 import (
@@ -15,7 +17,7 @@ import (
 
 const (
 	DriverID      = "hollyland-3547-0007"
-	DriverVersion = "1.0.0"
+	DriverVersion = "1.0.1"
 	USBVendorID   = "3547"
 	USBProductID  = "0007"
 )
@@ -64,7 +66,7 @@ func DefaultProfile() Profile {
 		PID:             USBProductID,
 		Manufacturer:    "Shenzhen Hollyland Technology Co.,Ltd",
 		Product:         "Wireless microphone",
-		ModelExact:      "", // unresolved by design
+		ModelExact:      "LARK M2",
 		Interfaces:      []int{0, 1, 3, 7},
 		NonContiguousIF: true,
 		RequireHID:      true,
@@ -86,7 +88,7 @@ func DefaultProfile() Profile {
 				{Address: "02", Transfer: "bulk", MaxPacketBytes: 64, Interval: 9},
 			}},
 		},
-		ProfileVersion: "1.0.0",
+		ProfileVersion: DriverVersion,
 	}
 }
 
@@ -222,7 +224,7 @@ func IdentityFor(serialHint string) core.Identity {
 func identityFor(serialHint string, installationSalt []byte) core.Identity {
 	attrs := map[string]string{
 		"usb_vid_pid":  USBVendorID + ":" + USBProductID,
-		"model_exact":  "unresolved",
+		"model_exact":  DefaultProfile().ModelExact,
 		"manufacturer": DefaultProfile().Manufacturer,
 	}
 	id := core.DeviceID("dev_hl_" + USBVendorID + USBProductID)
@@ -243,7 +245,7 @@ func identityFor(serialHint string, installationSalt []byte) core.Identity {
 		DeviceID:      id,
 		DriverID:      DriverID,
 		DriverVersion: DriverVersion,
-		DisplayName:   "Hollyland wireless mic receiver (3547:0007)",
+		DisplayName:   "Hollyland LARK M2 receiver (3547:0007)",
 		Attributes:    attrs,
 	}
 }
@@ -260,21 +262,21 @@ func Capabilities() []core.Capability {
 		{
 			Schema: core.CapabilitySchema, Key: core.CapControlPress,
 			Availability:  core.Available,
-			Evidence:      core.Evidence{Level: core.EvidenceMeasured, Summary: "HID 06 01 00 → KEY_VOLUMEUP", ProfileVersion: DriverVersion},
+			Evidence:      core.Evidence{Level: core.EvidenceMeasured, Summary: "LARK M2 TX double press → HID 06 01 00 → KEY_VOLUMEUP", ProfileVersion: DriverVersion},
 			SideEffects:   []core.SideEffect{{ID: "host.volume_increment", Passive: true, Description: "Consumer Control Volume Increment"}},
 			DriverVersion: DriverVersion,
 		},
 		{
 			Schema: core.CapabilitySchema, Key: core.CapControlRelease,
 			Availability:  core.Available,
-			Evidence:      core.Evidence{Level: core.EvidenceMeasured, Summary: "HID 06 00 00", ProfileVersion: DriverVersion},
+			Evidence:      core.Evidence{Level: core.EvidenceMeasured, Summary: "LARK M2 TX double-press release → HID 06 00 00", ProfileVersion: DriverVersion},
 			DriverVersion: DriverVersion,
 		},
 		{
 			Schema: core.CapabilitySchema, Key: core.CapSettingNoiseCancellation,
 			Availability:      core.Unsupported,
-			UnavailableReason: "transmitter NC not host-visible in bounded trials",
-			Evidence:          core.Evidence{Level: core.EvidenceMeasuredNegative, Summary: "no HID/evdev/usbmon event"},
+			UnavailableReason: "LARK M2 single-press noise cancellation is device-local and not exposed as a host setting",
+			Evidence:          core.Evidence{Level: core.EvidenceMeasuredNegative, Summary: "single TX/RX press changed NC state without HID/evdev/usbmon event"},
 			DriverVersion:     DriverVersion,
 		},
 	}

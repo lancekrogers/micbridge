@@ -3,7 +3,7 @@
 ## What you need
 
 - Linux host with ordinary-user permissions
-- Optional: Hollyland USB receiver **3547:0007**
+- Optional: Hollyland LARK M2 USB-C receiver **3547:0007**
 - `micbridge` installed (`just install` or `go install`)
 
 Hardware is not required to explore the fake driver path.
@@ -29,18 +29,23 @@ micbridge record
 micbridge stop
 ```
 
-## Physical receiver (3547:0007)
+## Physical LARK M2 receiver (3547:0007)
 
 1. Plug in the receiver.
 2. Run `micbridge doctor` and fix any path/permission hints (udev `uaccess` for this VID:PID only).
 3. Confirm the device appears once under a stable ID (not ALSA card numbers).
 4. Run `micbridge setup`; the default primary-press binding is complete only
    when audio/control capabilities are callable.
-5. Run `micbridge ui` (or `micbridge record arm`), then use the **receiver
-   button** to start and stop.
+5. Run `micbridge ui` (or `micbridge record arm`). **Double-press the button on
+   either LARK M2 microphone** to start, then double-press either microphone
+   again to stop.
 
-**Side effect:** the receiver button is also Consumer Control Volume Up on the
-host. Micbridge declares this passively and does not exclusive-grab by default.
+One press only toggles LARK M2 noise cancellation and does not send a host
+control event.
+
+**Side effect:** the transmitter double press is also Consumer Control Volume
+Up on the host. Micbridge declares this passively and does not exclusive-grab
+by default.
 
 ## Recovery
 

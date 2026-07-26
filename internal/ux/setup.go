@@ -34,9 +34,22 @@ type SetupPlan struct {
 // BuildSetupPlan creates a one-decision-at-a-time plan for a device.
 func BuildSetupPlan(dev client.Device) SetupPlan {
 	p := SetupPlan{Device: dev}
+	isLARKM2 := dev.Identity.DriverID == "hollyland-3547-0007"
+	deviceTitle := "Confirm receiver"
+	controlRequirement := "Audio capture and control press must be available"
+	bindTitle := "Enable press-to-toggle recording"
+	bindBody := "Map the primary press control to recording.toggle."
+	bindConsequences := "Each press starts/stops an armed session."
+	if isLARKM2 {
+		deviceTitle = "Confirm LARK M2 receiver"
+		controlRequirement = "Audio capture and the LARK M2 transmitter double-press control must be available"
+		bindTitle = "Enable LARK M2 recording shortcut"
+		bindBody = "Map a double press on either LARK M2 microphone to recording.toggle. A single press only toggles noise cancellation."
+		bindConsequences = "Each transmitter double press starts/stops an armed session."
+	}
 	// Step 1: confirm identity
 	p.Steps = append(p.Steps, SetupStep{
-		ID: "confirm_device", Title: "Confirm receiver",
+		ID: "confirm_device", Title: deviceTitle,
 		Body: fmt.Sprintf("Found %s (%s)\nDriver %s %s",
 			dev.Identity.DisplayName, dev.Identity.DeviceID, dev.Identity.DriverID, dev.Identity.DriverVersion),
 		Recommended:  "Continue with this device",
@@ -67,7 +80,7 @@ func BuildSetupPlan(dev client.Device) SetupPlan {
 	}
 	if !audioOK || !pressOK {
 		stepCap.Blocked = true
-		stepCap.Hints = append(stepCap.Hints, "Audio capture and receiver press must be available")
+		stepCap.Hints = append(stepCap.Hints, controlRequirement)
 	}
 	p.Steps = append(p.Steps, stepCap)
 	// Step 3: permissions
@@ -82,10 +95,10 @@ func BuildSetupPlan(dev client.Device) SetupPlan {
 	// Step 4: binding ack
 	side := "host.volume_increment (passive Volume-Up)"
 	p.Steps = append(p.Steps, SetupStep{
-		ID: "bind_toggle", Title: "Enable press-to-toggle recording",
-		Body:         "Map receiver primary press to recording.toggle.",
+		ID: "bind_toggle", Title: bindTitle,
+		Body:         bindBody,
 		Recommended:  "Enable binding",
-		Consequences: "Each press starts/stops an armed session. Side effect: " + side,
+		Consequences: bindConsequences + " Side effect: " + side,
 		ExpertNote:   "Bindings API: PUT /v1/bindings",
 	})
 	return p

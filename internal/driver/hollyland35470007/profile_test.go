@@ -36,6 +36,9 @@ func exactCandidate() driver.Candidate {
 
 func TestExactMatchAndNearMisses(t *testing.T) {
 	p := hl.DefaultProfile()
+	if p.ModelExact != "LARK M2" {
+		t.Fatalf("exact model = %q", p.ModelExact)
+	}
 	res, _ := hl.EvaluateMatch(p, hl.CandidateUSB{
 		VID: "3547", PID: "0007", Manufacturer: p.Manufacturer, Product: p.Product,
 		HasHID: true, HasAudio: true, HasVendorIF: true, InterfaceNums: []int{0, 1, 3, 7},
@@ -97,6 +100,12 @@ func TestDriverMatchOpenGroupSurfaces(t *testing.T) {
 	if len(dev.Surfaces()) < 2 {
 		t.Fatal(dev.Surfaces())
 	}
+	if got := dev.Identity().DisplayName; !strings.Contains(got, "LARK M2") {
+		t.Fatalf("display name = %q", got)
+	}
+	if got := dev.Surfaces()[1].Label; !strings.Contains(got, "TX double-press") {
+		t.Fatalf("control surface label = %q", got)
+	}
 	// same identity after path churn
 	c2 := exactCandidate()
 	c2.Attributes["serial"] = "stable-test-serial"
@@ -151,6 +160,12 @@ func TestControlParserAndPassiveSideEffect(t *testing.T) {
 	}
 	if !b.Enabled || len(b.SideEffects) == 0 {
 		t.Fatal(b)
+	}
+	for _, capability := range hl.Capabilities() {
+		if capability.Key == core.CapControlPress &&
+			!strings.Contains(capability.Evidence.Summary, "LARK M2 TX double press") {
+			t.Fatalf("control evidence does not explain the gesture: %+v", capability)
+		}
 	}
 }
 

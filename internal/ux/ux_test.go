@@ -1,6 +1,7 @@
 package ux_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/lancekrogers/micbridge/internal/audio"
@@ -55,6 +56,31 @@ func TestGuidedSetupFakeDevice(t *testing.T) {
 	b, err := ux.ApplyRecommendedBinding(eng, dev)
 	if err != nil || !b.Enabled {
 		t.Fatal(err, b)
+	}
+}
+
+func TestGuidedSetupExplainsLARKM2DoublePress(t *testing.T) {
+	plan := ux.BuildSetupPlan(client.Device{
+		Schema: client.DeviceSchema,
+		Identity: client.Identity{
+			Schema: client.IdentitySchema, DeviceID: "dev_lark_m2",
+			DriverID: "hollyland-3547-0007", DriverVersion: "1.0.1",
+			DisplayName: "Hollyland LARK M2 receiver (3547:0007)",
+		},
+		Capabilities: []client.Capability{
+			{Schema: client.CapabilitySchema, Key: client.CapAudioCapture, Availability: client.Available,
+				Evidence: client.Evidence{Level: client.EvidenceMeasured}},
+			{Schema: client.CapabilitySchema, Key: client.CapControlPress, Availability: client.Available,
+				Evidence: client.Evidence{Level: client.EvidenceMeasured}},
+		},
+	})
+	joined := ""
+	for _, step := range plan.Steps {
+		joined += step.Title + "\n" + step.Body + "\n" + step.Consequences + "\n"
+	}
+	if !strings.Contains(joined, "double press on either LARK M2 microphone") ||
+		!strings.Contains(joined, "single press only toggles noise cancellation") {
+		t.Fatalf("setup omitted the physical gesture: %s", joined)
 	}
 }
 

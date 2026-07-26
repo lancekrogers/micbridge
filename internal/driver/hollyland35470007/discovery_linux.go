@@ -74,7 +74,10 @@ func DiscoverLinux(ctx context.Context, usbRoot, inputClassRoot, devRoot string)
 		if err != nil {
 			return nil, err
 		}
-		controlPath := findInputNode(parent, inputClassRoot, devRoot)
+		controlPath, err := findInputNode(parent, inputClassRoot, devRoot)
+		if err != nil {
+			return nil, err
+		}
 		candidate := driver.Candidate{
 			Attributes: map[string]string{
 				"usb_vid":               vid,
@@ -204,26 +207,73 @@ func inspectInterfaces(root, parentName string) ([]int, bool, bool, bool, error)
 	return nums, audio, hid, vendor, nil
 }
 
-func findInputNode(usbParent, classRoot, devRoot string) string {
+const (
+	evKey       = 1
+	keyVolumeUp = 115
+)
+
+func findInputNode(usbParent, classRoot, devRoot string) (string, error) {
 	usbReal, err := filepath.EvalSymlinks(usbParent)
 	if err != nil {
 		usbReal = filepath.Clean(usbParent)
 	}
 	entries, err := filepath.Glob(filepath.Join(classRoot, "event*"))
 	if err != nil {
-		return ""
+		return "", err
 	}
+	var matches []string
 	for _, eventPath := range entries {
-		deviceReal, err := filepath.EvalSymlinks(filepath.Join(eventPath, "device"))
+		devicePath := filepath.Join(eventPath, "device")
+		deviceReal, err := filepath.EvalSymlinks(devicePath)
 		if err != nil {
 			continue
 		}
 		rel, err := filepath.Rel(usbReal, deviceReal)
-		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return filepath.Join(devRoot, "input", filepath.Base(eventPath))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
 		}
+		name := strings.ToLower(readTrimmed(filepath.Join(devicePath, "name")))
+		if !strings.Contains(name, "consumer control") {
+			continue
+		}
+		if !bitmapContains(readTrimmed(filepath.Join(devicePath, "capabilities", "ev")), evKey) ||
+			!bitmapContains(readTrimmed(filepath.Join(devicePath, "capabilities", "key")), keyVolumeUp) {
+			continue
+		}
+		matches = append(matches, filepath.Join(devRoot, "input", filepath.Base(eventPath)))
 	}
-	return ""
+	switch len(matches) {
+	case 0:
+		return "", nil
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf(
+			"hollyland: %d Consumer Control inputs advertise KEY_VOLUMEUP under one LARK M2 receiver",
+			len(matches),
+		)
+	}
+}
+
+// Linux input capability bitmaps are hexadecimal machine words ordered from
+// the highest word to the lowest word. Micbridge runs on the same architecture
+// as the kernel whose sysfs it reads, so strconv.IntSize is the word width.
+func bitmapContains(raw string, bit int) bool {
+	if bit < 0 {
+		return false
+	}
+	words := strings.Fields(raw)
+	wordBits := strconv.IntSize
+	wordFromRight := bit / wordBits
+	index := len(words) - 1 - wordFromRight
+	if index < 0 || index >= len(words) {
+		return false
+	}
+	word, err := strconv.ParseUint(words[index], 16, wordBits)
+	if err != nil {
+		return false
+	}
+	return word&(uint64(1)<<uint(bit%wordBits)) != 0
 }
 
 func readTrimmed(path string) string {

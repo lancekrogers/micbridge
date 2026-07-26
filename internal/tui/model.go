@@ -205,6 +205,11 @@ func (m Model) View() string {
 			deviceLines = append(deviceLines, fmt.Sprintf("● %s", device.Identity.DisplayName))
 			deviceLines = append(deviceLines, fmt.Sprintf("  %s • %d surfaces • %d capabilities",
 				device.Identity.DeviceID, len(device.Surfaces), len(device.Capabilities)))
+			if device.Identity.DriverID == "hollyland-3547-0007" {
+				deviceLines = append(deviceLines,
+					"  Control  Double-press either LARK M2 microphone",
+					"  Single press toggles noise cancellation only")
+			}
 		}
 	}
 	recordingPanel := panelStyle(width).Render(strings.Join([]string{

@@ -1,7 +1,8 @@
 # Bounded Hollyland native-capture evidence — 2026-07-24
 
 Scope: ordinary-user discovery, source correlation, native callback ingress,
-and WAV finalization. This is not the still-pending human two-press result.
+and WAV finalization. This evidence preceded and remains separate from the
+completed 2026-07-26 human two-double-press result.
 
 ## Sanitized environment
 
