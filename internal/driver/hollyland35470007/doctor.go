@@ -59,7 +59,8 @@ func DoctorAccess(audioPath, controlPath string) DoctorReport {
 	check("audio", audioPath)
 	check("control", controlPath)
 	r.Hints = append(r.Hints, "Micbridge runs as the ordinary user; do not add a root daemon or broad input group membership")
-	r.Hints = append(r.Hints, "Receiver Volume-Up is a passive side effect (host.volume_increment); exclusive grab is off by default")
+	r.Hints = append(r.Hints, "Double-press either LARK M2 microphone to send the recording control; a single press only toggles noise cancellation")
+	r.Hints = append(r.Hints, "The TX double press also sends host Volume-Up (host.volume_increment); exclusive grab is off by default")
 	return r
 }
 

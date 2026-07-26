@@ -86,7 +86,8 @@ default `check` path.
 Product boundaries live in the campaign design WI-66237e
 (`workflow/design/programmable-wireless-mic-api/` in the lance-arch campaign)
 and `docs/implementation-baseline.md`. Match Hollyland only as exact USB
-`3547:0007` plus measured descriptor shape; keep the retail model unresolved.
+`3547:0007` plus the measured LARK M2 USB-C receiver descriptor shape; do not
+broaden matching to brand, model text, or other receiver variants.
 
 ## Dependency updates
 

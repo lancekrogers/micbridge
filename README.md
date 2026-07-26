@@ -4,15 +4,16 @@ Programmable wireless microphone controls and local recording API.
 
 Micbridge is a local-first Go service: it discovers supported USB receivers,
 exposes a versioned device-independent API, and records recoverable WAV
-sessions. The first evidence-backed driver targets Hollyland USB **`3547:0007`**
-on Linux. The product contract stays generic—no Habitat runtime dependency and
-no Samantha-specific schema.
+sessions. The first evidence-backed driver targets the Hollyland **LARK M2**
+USB-C receiver at USB **`3547:0007`** on Linux. The product contract stays
+generic—no Habitat runtime dependency and no Samantha-specific schema.
 
 **Status:** v0.1 review candidate (`v0.0.0-dev`, not released). The daemon
 discovers the exact Linux receiver, groups USB Audio and evdev control, opens
 an explicit malgo source, records create-only WAVs, exposes API/CLI/SDK
 workflows, and provides an interactive TUI. Hardware-free mode is explicit
-(`MICBRIDGE_FAKE=1`). Final receiver-button HIL remains a release gate.
+(`MICBRIDGE_FAKE=1`). Final binding-to-WAV HIL using two LARK M2 transmitter
+double presses remains a release gate.
 
 ## Supported host (v0.1 focus)
 
@@ -153,11 +154,12 @@ or live audio—only synthetic/licensed fixtures.
 ## Evidence and privacy
 
 - Match Hollyland only as USB **`3547:0007`** plus measured descriptors.
-- Exact retail model remains unresolved; do not claim family-wide support.
-- Transmitter / noise-cancellation controls stay unavailable until Habitat
-  produces repeatable host evidence.
-- Receiver Volume-Up is a declared passive side effect, not silent exclusive
-  grab.
+- The measured profile is the LARK M2 USB-C mobile receiver; do not claim
+  family-wide support for other LARK M2 receiver variants or descriptor shapes.
+- A single TX/RX press toggles LARK M2 noise cancellation and is intentionally
+  host-silent. Double-press either transmitter for the host recording control.
+- The transmitter double press also emits host Volume-Up; Micbridge declares
+  this passive side effect and does not silently exclusive-grab the device.
 - See [SECURITY.md](SECURITY.md) for reporting and data-handling rules.
 
 ## Contributing

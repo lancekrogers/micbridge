@@ -13,6 +13,17 @@ import (
 
 type fakeService struct{}
 
+type larkService struct{ fakeService }
+
+func (larkService) Devices(context.Context) ([]client.Device, error) {
+	return []client.Device{{
+		Identity: client.Identity{
+			DeviceID: "dev_lark", DriverID: "hollyland-3547-0007",
+			DisplayName: "Hollyland LARK M2 receiver (3547:0007)",
+		},
+	}}, nil
+}
+
 func (fakeService) Status(context.Context) (map[string]any, error) {
 	return map[string]any{
 		"healthy": true,
@@ -20,6 +31,20 @@ func (fakeService) Status(context.Context) (map[string]any, error) {
 			SessionID: "rec_test", State: client.StateArmed,
 		},
 	}, nil
+}
+
+func TestLARKM2ControlGuidanceIsVisible(t *testing.T) {
+	model := tui.NewModel(larkService{})
+	batch, ok := model.Init()().(tea.BatchMsg)
+	if !ok || len(batch) == 0 {
+		t.Fatalf("init did not return a refresh batch")
+	}
+	updated, _ := model.Update(batch[0]())
+	view := updated.(tui.Model).View()
+	if !strings.Contains(view, "Double-press either LARK M2") ||
+		!strings.Contains(view, "Single press toggles noise cancellation") {
+		t.Fatalf("LARK M2 guidance missing: %q", view)
+	}
 }
 func (fakeService) Devices(context.Context) ([]client.Device, error) {
 	return []client.Device{{

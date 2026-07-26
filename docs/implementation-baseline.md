@@ -63,13 +63,14 @@ Measured and in-scope for v0.1 first driver:
 
 - Exact USB identity **`3547:0007`** plus measured descriptor shape
 - Two-channel **48 kHz** USB Audio input
-- Receiver HID press/release → Linux `EV_KEY` / `KEY_VOLUMEUP` (115)
+- LARK M2 transmitter double press → receiver HID press/release → Linux
+  `EV_KEY` / `KEY_VOLUMEUP` (115)
 - Vendor bulk endpoints present with **unknown** semantics (no product writes)
 
 Not proven / must stay unavailable until Habitat evidence:
 
-- Transmitter noise-cancellation buttons as host-visible controls
-- Exact retail model name as a support claim (model remains unresolved)
+- Single-press transmitter/receiver noise cancellation as a host-visible setting
+- Other LARK M2 receiver variants or descriptor shapes
 - Vendor USB writes, firmware, pairing, or private-radio decoding
 - Automatic Volume-Up suppression (declare passive side effect only)
 

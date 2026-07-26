@@ -153,7 +153,7 @@ func (d *Driver) Open(ctx context.Context, m driver.Match, c driver.Candidate) (
 		conn:     core.ConnectionID(d.ids.Next("conn")),
 		surfaces: []core.Surface{
 			{ID: "audio0", Kind: core.SurfaceAudioCapture, Label: "USB Audio", TransientPath: audioPath},
-			{ID: "ctrl0", Kind: core.SurfaceControl, Label: "Receiver button", TransientPath: ctrlPath},
+			{ID: "ctrl0", Kind: core.SurfaceControl, Label: "LARK M2 TX double-press control", TransientPath: ctrlPath},
 			{ID: "vendor0", Kind: core.SurfaceVendor, Label: "Vendor bulk (metadata only)", TransientPath: c.Attributes["vendor"]},
 		},
 		caps: Capabilities(),

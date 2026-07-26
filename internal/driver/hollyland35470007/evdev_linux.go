@@ -15,11 +15,6 @@ import (
 	"github.com/lancekrogers/micbridge/internal/driver"
 )
 
-const (
-	evKey       = 0x01
-	keyVolumeUp = 115
-)
-
 func readEvdev(ctx context.Context, path string, emit func(driver.ControlEvent) error) error {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
