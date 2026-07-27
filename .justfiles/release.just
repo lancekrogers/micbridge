@@ -5,7 +5,8 @@ set working-directory := ".."
 bin_dir := "bin"
 binary_name := "micbridge"
 gobin := env_var_or_default("GOBIN", `go env GOPATH` + "/bin")
-version := env_var_or_default("VERSION", "0.0.0-dev")
+commit := `git rev-parse --short=12 HEAD`
+version := env_var_or_default("VERSION", "0.0.0-dev+" + commit)
 
 # Install binary into GOBIN (delegates to root recipe).
 install-bin:

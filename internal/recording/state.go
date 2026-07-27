@@ -71,12 +71,13 @@ func (e *TransitionError) Error() string {
 
 // Snapshot is an immutable view of session state.
 type Snapshot struct {
-	SessionID string    `json:"session_id"`
-	State     State     `json:"state"`
-	Actor     Actor     `json:"actor"`
-	Reason    string    `json:"reason,omitempty"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Title     string    `json:"title,omitempty"`
+	SessionID  string    `json:"session_id"`
+	State      State     `json:"state"`
+	Actor      Actor     `json:"actor"`
+	Reason     string    `json:"reason,omitempty"`
+	OutputPath string    `json:"output_path,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Title      string    `json:"title,omitempty"`
 }
 
 // Sink is the audio/session effect boundary (fake in this phase).
@@ -94,6 +95,13 @@ type Sink interface {
 // OutputSink supports an API-selected create-only artifact path.
 type OutputSink interface {
 	PrepareAt(ctx context.Context, sessionID, outputPath string) error
+}
+
+// CommandSink receives transition provenance for durable session journals.
+// Sinks that do not need provenance may implement only Sink.
+type CommandSink interface {
+	StartCommand(ctx context.Context, sessionID string, cmd Command) error
+	StopCommand(ctx context.Context, sessionID string, cmd Command) error
 }
 
 // FakeSink is an in-memory sink for tests.
@@ -314,9 +322,10 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 	now := m.clk.Now()
 
 	var (
-		next State
-		err  error
-		sid  = cur.SessionID
+		next       State
+		err        error
+		sid        = cur.SessionID
+		outputPath = cur.OutputPath
 	)
 
 	switch cmd.Name {
@@ -325,6 +334,7 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 			return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "arm only from idle/completed/failed"}
 		}
 		sid = m.ids.Next("rec")
+		outputPath = cmd.OutputPath
 		if err = m.prepare(ctx, sid, cmd.OutputPath); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return cur, ctxErr
@@ -338,9 +348,10 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 		switch cur.State {
 		case StateArmed:
 			next = StateStarting
-		case StateIdle:
+		case StateIdle, StateCompleted:
 			// arm+start
 			sid = m.ids.Next("rec")
+			outputPath = cmd.OutputPath
 			if err = m.prepare(ctx, sid, cmd.OutputPath); err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return cur, ctxErr
@@ -356,7 +367,12 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 			return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "cannot start"}
 		}
 		if next == StateStarting {
-			if err = m.sink.Start(ctx, sid); err != nil {
+			if aware, ok := m.sink.(CommandSink); ok {
+				err = aware.StartCommand(ctx, sid, cmd)
+			} else {
+				err = m.sink.Start(ctx, sid)
+			}
+			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return cur, ctxErr
 				}
@@ -381,13 +397,22 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 			return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "cannot stop"}
 		}
 		if next == StateStopping {
-			if err = m.sink.Stop(ctx, sid); err != nil {
+			if aware, ok := m.sink.(CommandSink); ok {
+				err = aware.StopCommand(ctx, sid, cmd)
+			} else {
+				err = m.sink.Stop(ctx, sid)
+			}
+			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return cur, ctxErr
 				}
+				_ = m.sink.Abort(ctx, sid, err.Error())
 				next = StateFailed
 			} else {
 				next = StateCompleted
+				if artifacts, ok := m.sink.(interface{ LastFinal() FinalMeta }); ok {
+					outputPath = artifacts.LastFinal().Path
+				}
 			}
 		}
 	case CmdFail:
@@ -407,17 +432,19 @@ func (m *Machine) apply(ctx context.Context, cmd Command) (Snapshot, error) {
 	case CmdReset:
 		next = StateIdle
 		sid = ""
+		outputPath = ""
 	default:
 		return cur, &TransitionError{From: cur.State, Cmd: cmd.Name, Reason: "unknown command"}
 	}
 
 	snap := Snapshot{
-		SessionID: sid,
-		State:     next,
-		Actor:     cmd.Actor,
-		Reason:    cmd.Reason,
-		UpdatedAt: now,
-		Title:     cur.Title,
+		SessionID:  sid,
+		State:      next,
+		Actor:      cmd.Actor,
+		Reason:     cmd.Reason,
+		OutputPath: outputPath,
+		UpdatedAt:  now,
+		Title:      cur.Title,
 	}
 	m.mu.Lock()
 	m.snap = snap

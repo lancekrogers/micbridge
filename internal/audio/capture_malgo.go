@@ -9,9 +9,17 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gen2brain/malgo"
+)
+
+const (
+	// Recording favors continuity over interactive-monitoring latency.
+	capturePeriodFrames      = 960 // 20 ms at 48 kHz
+	capturePeriods           = 4
+	maxCaptureCallbackFrames = 8192
 )
 
 // OpenNativeCapture initializes an explicitly selected malgo capture device.
@@ -53,9 +61,9 @@ func OpenNativeCapture(ctx context.Context, source Source, format Format, handle
 		cleanupContext()
 		return nil, err
 	}
-	const periodFrames = 480
-	frameBytes := int(periodFrames * format.Channels * (format.BitsPerSample / 8))
-	ingress, err := NewIngress(64, frameBytes, PolicyDropNewest)
+	bytesPerFrame := int(format.Channels * (format.BitsPerSample / 8))
+	maxFrameBytes := maxCaptureCallbackFrames * bytesPerFrame
+	ingress, err := NewIngress(64, maxFrameBytes, PolicyDropNewest)
 	if err != nil {
 		cleanupContext()
 		return nil, err
@@ -63,8 +71,12 @@ func OpenNativeCapture(ctx context.Context, source Source, format Format, handle
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
 	var (
-		errMu     sync.Mutex
-		streamErr error
+		errMu          sync.Mutex
+		streamErr      error
+		callbacksCount atomic.Uint64
+		acceptedFrames atomic.Uint64
+		droppedFrames  atomic.Uint64
+		acceptedBytes  atomic.Uint64
 	)
 	go func() {
 		defer close(workerDone)
@@ -85,10 +97,19 @@ func OpenNativeCapture(ctx context.Context, source Source, format Format, handle
 	config.Capture.Format = nativeFormat
 	config.Capture.Channels = format.Channels
 	config.SampleRate = format.SampleRate
-	config.PeriodSizeInFrames = periodFrames
+	config.PeriodSizeInFrames = capturePeriodFrames
+	config.Periods = capturePeriods
+	config.PerformanceProfile = malgo.Conservative
 	config.NoFixedSizedCallback = 0
-	callbacks := malgo.DeviceCallbacks{Data: func(_, input []byte, _ uint32) {
-		_ = ingress.PushFromCallback(input, time.Now().UnixNano())
+	callbacks := malgo.DeviceCallbacks{Data: func(_, input []byte, frameCount uint32) {
+		callbacksCount.Add(1)
+		expectedBytes := int(frameCount) * bytesPerFrame
+		if frameCount == 0 || len(input) != expectedBytes || !ingress.PushFromCallback(input, time.Now().UnixNano()) {
+			droppedFrames.Add(uint64(frameCount))
+			return
+		}
+		acceptedFrames.Add(uint64(frameCount))
+		acceptedBytes.Add(uint64(len(input)))
 	}}
 	device, err := malgo.InitDevice(ac.Context, config, callbacks)
 	C.free(deviceIDPointer)
@@ -109,6 +130,14 @@ func OpenNativeCapture(ctx context.Context, source Source, format Format, handle
 		},
 		startFn:  device.Start,
 		overflow: ingress.OverflowCount,
+		stats: func() CaptureStats {
+			return CaptureStats{
+				Callbacks:      callbacksCount.Load(),
+				FramesAccepted: acceptedFrames.Load(),
+				FramesDropped:  droppedFrames.Load(),
+				BytesAccepted:  acceptedBytes.Load(),
+			}
+		},
 	}
 	var closeOnce sync.Once
 	capture.closeFn = func() error {
@@ -127,6 +156,9 @@ func OpenNativeCapture(ctx context.Context, source Source, format Format, handle
 				closeErr = streamErr
 			}
 			errMu.Unlock()
+			if lost := droppedFrames.Load(); closeErr == nil && lost > 0 {
+				closeErr = fmt.Errorf("audio: capture dropped %d frames; partial recording preserved", lost)
+			}
 		})
 		return closeErr
 	}

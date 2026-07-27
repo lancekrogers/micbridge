@@ -22,6 +22,8 @@ type Journal struct {
 type JournalRecord struct {
 	SessionID string    `json:"session_id"`
 	Step      string    `json:"step"` // created|wrote|synced|finalized|aborted
+	Actor     Actor     `json:"actor,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
 	Partial   string    `json:"partial,omitempty"`
 	Final     string    `json:"final,omitempty"`
 	DataBytes uint64    `json:"data_bytes,omitempty"`

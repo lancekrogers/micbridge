@@ -2,6 +2,8 @@
 
 Status: **Accepted** (2026-07-24)
 
+Amended: **2026-07-26** after the first user playback exposed audible crackle.
+
 ## Context
 
 Micbridge captures PCM via malgo/miniaudio. The design requires starting with a
@@ -13,6 +15,12 @@ after minimizing the Go handoff.
 
 **Retain the direct Go SPSC ingress** implemented in `internal/audio.Ingress`
 (`PushFromCallback` + atomic ring). Do **not** introduce a C ring for v0.1.
+
+For recording, request the measured native 48 kHz/stereo/24-bit shape instead
+of real-time 16-bit conversion, use miniaudio's conservative profile with four
+20 ms periods, and accept bounded variable callback chunks. Track accepted and
+dropped frames; any drop makes finalization fail visibly and preserves the
+partial artifact.
 
 ## Predeclared thresholds
 
@@ -43,7 +51,7 @@ Results:
   queue length stays ≤ capacity; `-race` clean after SPSC rewrite.
 - `TestIngressCleanShutdown` — worker exits after close/cancel.
 - Health tests inject stalls/gaps/disconnect and assert level transitions.
-- `OpenNativeCapture` copies fixed 480-frame S16 chunks into the same ingress;
+- `OpenNativeCapture` copies bounded callback chunks into the same ingress;
   all WAV/file work runs on the drain worker.
 - A bounded ordinary-user run against the attached `3547:0007` source
   negotiated native 48 kHz/stereo/24-bit input to requested 16-bit PCM and
@@ -51,6 +59,10 @@ Results:
 
 No reproducible deadline miss or callback drop was observed in synthetic loads
 or the bounded real callback run. Therefore a C ring is not justified.
+
+The initial 16-bit HIL remains valid historical transition evidence, but it is
+not sufficient audio-quality evidence. The current native 24-bit path requires
+a fresh bounded listening check before release.
 
 ## Consequences
 

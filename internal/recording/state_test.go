@@ -37,6 +37,30 @@ func TestArmStartStopHappyPath(t *testing.T) {
 	}
 }
 
+func TestCompletedSessionCanStartNextRecordingWithoutRearming(t *testing.T) {
+	sink := &recording.FakeSink{}
+	m := recording.NewMachine(nil, idgen.NewSeeded("persistent"), sink, recording.Limits{})
+	defer m.Close()
+	ctx := context.Background()
+	first, err := m.Submit(ctx, recording.Command{Name: recording.CmdArm, Actor: recording.ActorCLI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Submit(ctx, recording.Command{Name: recording.CmdStart, Actor: recording.ActorBinding}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Submit(ctx, recording.Command{Name: recording.CmdStop, Actor: recording.ActorBinding}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := m.Submit(ctx, recording.Command{Name: recording.CmdStart, Actor: recording.ActorBinding})
+	if err != nil || second.State != recording.StateRecording {
+		t.Fatalf("start next recording: %+v %v", second, err)
+	}
+	if second.SessionID == first.SessionID {
+		t.Fatalf("new recording reused session %q", second.SessionID)
+	}
+}
+
 func TestIdempotentStartStop(t *testing.T) {
 	m := recording.NewMachine(nil, idgen.NewSeeded("i"), &recording.FakeSink{}, recording.Limits{})
 	defer m.Close()
@@ -68,6 +92,23 @@ func TestIllegalTransition(t *testing.T) {
 	var te *recording.TransitionError
 	if !errors.As(err, &te) {
 		t.Fatalf("want TransitionError, got %v", err)
+	}
+}
+
+func TestStopFailureAbortsInsteadOfPublishingCompleted(t *testing.T) {
+	sink := &recording.FakeSink{FailOn: "stop"}
+	m := recording.NewMachine(nil, idgen.NewSeeded("stop-fail"), sink, recording.Limits{})
+	defer m.Close()
+	ctx := context.Background()
+	if _, err := m.Submit(ctx, recording.Command{Name: recording.CmdStart, Actor: recording.ActorCLI}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := m.Submit(ctx, recording.Command{Name: recording.CmdStop, Actor: recording.ActorCLI})
+	if err == nil || snapshot.State != recording.StateFailed {
+		t.Fatalf("stop failure was hidden: snapshot=%+v err=%v", snapshot, err)
+	}
+	if got := sink.Calls[len(sink.Calls)-1]; got == "stop" {
+		t.Fatalf("stop failure did not abort sink: calls=%v", sink.Calls)
 	}
 }
 

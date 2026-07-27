@@ -3,5 +3,7 @@
   "name": "micbridge",
   "version": "0.0.0-dev",
   "healthy": true,
-  "state_dir": "/tmp/micbridge-state"
+  "state_dir": "/tmp/micbridge-state",
+  "recordings_dir": "/tmp/micbridge-state/recordings",
+  "journals_dir": "/tmp/micbridge-state/journals"
 }

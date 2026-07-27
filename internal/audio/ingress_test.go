@@ -102,7 +102,7 @@ func TestIngressCleanShutdown(t *testing.T) {
 	}
 }
 
-func TestIngressRejectsUnsafeDropOldestAndWrongFrameSizes(t *testing.T) {
+func TestIngressRejectsUnsafeDropOldestAndOversizedFrames(t *testing.T) {
 	if _, err := audio.NewIngress(2, 16, audio.PolicyDropOldest); err == nil {
 		t.Fatal("expected unsafe drop-oldest policy rejection")
 	}
@@ -110,11 +110,18 @@ func TestIngressRejectsUnsafeDropOldestAndWrongFrameSizes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if in.PushFromCallback(make([]byte, 15), 1) {
-		t.Fatal("accepted short frame")
+	if !in.PushFromCallback(make([]byte, 15), 1) {
+		t.Fatal("rejected a valid variable-size callback")
 	}
 	if in.PushFromCallback(make([]byte, 17), 2) {
 		t.Fatal("accepted oversized frame")
+	}
+	if in.PushFromCallback(nil, 3) {
+		t.Fatal("accepted empty frame")
+	}
+	frame, ok := in.Pop()
+	if !ok || len(frame.PCM) != 15 {
+		t.Fatalf("variable frame was not preserved: ok=%v size=%d", ok, len(frame.PCM))
 	}
 	if got := in.OverflowCount(); got != 2 {
 		t.Fatalf("integrity rejects=%d", got)

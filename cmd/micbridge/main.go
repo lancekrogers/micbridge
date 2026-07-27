@@ -34,10 +34,7 @@ func main() {
 }
 
 func run(args []string) int {
-	if len(args) == 0 {
-		printUsage()
-		return client.ExitOK
-	}
+	args = defaultArgs(args)
 	jsonOut := envBool("MICBRIDGE_JSON") || flagJSON(&args)
 
 	switch args[0] {
@@ -77,6 +74,13 @@ func run(args []string) int {
 	}
 }
 
+func defaultArgs(args []string) []string {
+	if len(args) == 0 {
+		return []string{"ui"}
+	}
+	return args
+}
+
 func flagJSON(args *[]string) bool {
 	out := false
 	var rest []string
@@ -100,7 +104,7 @@ func printUsage() {
 	_, _ = fmt.Fprintf(os.Stdout, "Usage: %s <command> [flags]\n\n", core.Name)
 	_, _ = fmt.Fprintln(os.Stdout, "Commands:")
 	_, _ = fmt.Fprintln(os.Stdout, "  version    Print version")
-	_, _ = fmt.Fprintln(os.Stdout, "  serve      Run local daemon (fake driver by default)")
+	_, _ = fmt.Fprintln(os.Stdout, "  serve      Run local daemon (physical devices by default)")
 	_, _ = fmt.Fprintln(os.Stdout, "  status     Daemon status")
 	_, _ = fmt.Fprintln(os.Stdout, "  devices    List devices")
 	_, _ = fmt.Fprintln(os.Stdout, "  doctor     Local diagnostics")
@@ -120,7 +124,11 @@ func printUsage() {
 func stateLayout() (*storage.Layout, error) {
 	root := os.Getenv("MICBRIDGE_STATE_DIR")
 	if root == "" {
-		root = filepath.Join(".", ".micbridge")
+		var err error
+		root, err = storage.DefaultStateRoot()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return storage.NewLayout(root)
 }
@@ -205,7 +213,10 @@ func cmdServe(args []string, jsonOut bool) int {
 		return client.ExitUnavailable
 	}
 
-	format := recording.WAVFormat{SampleRate: 48000, Channels: 2, BitsPerSample: 16}
+	// The measured Hollyland source is native 48 kHz/stereo/24-bit. Recording
+	// that shape avoids an unnecessary real-time conversion in the capture
+	// backend and preserves the device's actual signal.
+	format := recording.WAVFormat{SampleRate: 48000, Channels: 2, BitsPerSample: 24}
 	policy := recording.DefaultPolicy(layout.RecordingsDir())
 	var (
 		devices       []core.Device
@@ -290,7 +301,7 @@ func cmdServe(args []string, jsonOut bool) int {
 			healthReasons = append(healthReasons, "receiver audio source is missing or ambiguous")
 		default:
 			source := selectedSources[0]
-			audioFormat := audio.Format{SampleRate: 48000, Channels: 2, BitsPerSample: 16}
+			audioFormat := audio.Format{SampleRate: 48000, Channels: 2, BitsPerSample: 24}
 			startPCM = func(ctx context.Context, write func([]byte) error) (func() error, error) {
 				capture, err := audio.OpenNativeCapture(ctx, source, audioFormat, write)
 				if err != nil {
@@ -474,7 +485,7 @@ func consumeControlEvents(
 			switch command.Action {
 			case binding.ActionRecordingToggle:
 				switch current.State {
-				case recording.StateArmed:
+				case recording.StateArmed, recording.StateCompleted:
 					name = recording.CmdStart
 				case recording.StateRecording:
 					name = recording.CmdStop
@@ -521,7 +532,8 @@ func cmdStatus(jsonOut bool) int {
 		layout, _ := stateLayout()
 		st = map[string]any{
 			"name": core.Name, "version": core.Version, "healthy": false,
-			"state_dir": layout.Root, "daemon": "unavailable",
+			"state_dir": layout.Root, "recordings_dir": layout.RecordingsDir(),
+			"journals_dir": layout.JournalsDir(), "daemon": "unavailable",
 		}
 		if jsonOut {
 			return printResult(true, "", st)
@@ -532,7 +544,7 @@ func cmdStatus(jsonOut bool) int {
 	if jsonOut {
 		return printResult(true, "", st)
 	}
-	fmt.Printf("%s %v healthy=%v\n", st["name"], st["version"], st["healthy"])
+	fmt.Printf("%s %v healthy=%v\nrecordings=%v\n", st["name"], st["version"], st["healthy"], st["recordings_dir"])
 	return client.ExitOK
 }
 
@@ -590,9 +602,11 @@ func cmdDoctor(jsonOut bool) int {
 	}
 	sock := socketPath(layout)
 	report := map[string]any{
-		"state_dir": layout.Root,
-		"socket":    sock,
-		"version":   core.Version,
+		"state_dir":      layout.Root,
+		"recordings_dir": layout.RecordingsDir(),
+		"journals_dir":   layout.JournalsDir(),
+		"socket":         sock,
+		"version":        core.Version,
 	}
 	candidates, discoverErr := hollyland.DiscoverLinux(context.Background(), "", "", "")
 	if discoverErr != nil {
@@ -653,7 +667,8 @@ func cmdDoctor(jsonOut bool) int {
 	if jsonOut {
 		return printResult(true, "", report)
 	}
-	fmt.Printf("state_dir=%s\nsocket=%s\ndaemon=%v\n", report["state_dir"], report["socket"], report["daemon"])
+	fmt.Printf("state_dir=%s\nrecordings_dir=%s\nsocket=%s\ndaemon=%v\n",
+		report["state_dir"], report["recordings_dir"], report["socket"], report["daemon"])
 	if discovery, ok := report["receiver_discovery"]; ok {
 		fmt.Printf("receiver_discovery=%v\n", discovery)
 	}
@@ -743,7 +758,11 @@ func cmdStop(jsonOut bool) int {
 	if err != nil {
 		return mapClientErr(err, jsonOut)
 	}
-	return printResult(jsonOut, fmt.Sprintf("state=%s", snap.State), snap)
+	human := fmt.Sprintf("state=%s", snap.State)
+	if snap.OutputPath != "" {
+		human += " saved=" + snap.OutputPath
+	}
+	return printResult(jsonOut, human, snap)
 }
 
 func cmdEvents(args []string, jsonOut bool) int {

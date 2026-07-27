@@ -2,7 +2,8 @@
 
 set working-directory := ".."
 
-state_dir := env_var_or_default("MICBRIDGE_STATE_DIR", ".micbridge")
+state_home := env_var_or_default("XDG_STATE_HOME", env_var("HOME") + "/.local/state")
+state_dir := env_var_or_default("MICBRIDGE_STATE_DIR", state_home + "/micbridge")
 bin_dir := "bin"
 binary_name := "micbridge"
 
@@ -13,6 +14,14 @@ version: ensure-bin
 # Run status; override with MICBRIDGE_STATE_DIR.
 status: ensure-bin
     MICBRIDGE_STATE_DIR="{{ state_dir }}" "./{{ bin_dir }}/{{ binary_name }}" status
+
+# Run the physical-device daemon. Use a second terminal for `ui`.
+serve: ensure-bin
+    "./{{ bin_dir }}/{{ binary_name }}" serve
+
+# Open the TUI client against the running daemon.
+ui: ensure-bin
+    "./{{ bin_dir }}/{{ binary_name }}" ui
 
 # Print the configured state directory layout (does not create recordings).
 print-state:
