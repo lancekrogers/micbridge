@@ -3,6 +3,7 @@
   "state": "recording",
   "actor": "binding",
   "reason": "control.pressed",
+  "output_path": "/home/example/.local/state/micbridge/recordings/rec_fixture_1.wav",
   "updated_at": "2026-07-24T16:10:12.345678Z",
   "title": "Project review"
 }

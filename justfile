@@ -8,8 +8,10 @@ binary_name := "micbridge"
 bin_dir := "bin"
 cmd_pkg := "./cmd/micbridge"
 gobin := env_var_or_default("GOBIN", `go env GOPATH` + "/bin")
-state_dir := env_var_or_default("MICBRIDGE_STATE_DIR", ".micbridge")
-version := env_var_or_default("VERSION", "0.0.0-dev")
+state_home := env_var_or_default("XDG_STATE_HOME", env_var("HOME") + "/.local/state")
+state_dir := env_var_or_default("MICBRIDGE_STATE_DIR", state_home + "/micbridge")
+commit := `git rev-parse --short=12 HEAD`
+version := env_var_or_default("VERSION", "0.0.0-dev+" + commit)
 
 # Focused modules (names avoid clashing with top-level recipes)
 [doc('Build and clean artifacts')]
@@ -38,6 +40,8 @@ default:
     @echo "  just test        # go test ./..."
     @echo "  just test-race   # go test -race ./..."
     @echo "  just install     # install to GOBIN"
+    @echo "  just serve       # run the physical-device daemon"
+    @echo "  just ui          # open the installed-style TUI client"
     @echo "  just demo        # version + status against a temp state dir"
     @echo "  just review      # static analysis + race suite"
     @echo ""
@@ -73,7 +77,16 @@ test-race:
 install: build
     install -d "{{ gobin }}"
     install -m 755 "{{ bin_dir }}/{{ binary_name }}" "{{ gobin }}/{{ binary_name }}"
-    @echo "installed {{ gobin }}/{{ binary_name }}"
+    cmp "{{ bin_dir }}/{{ binary_name }}" "{{ gobin }}/{{ binary_name }}"
+    @echo "installed {{ gobin }}/{{ binary_name }} ($({{ gobin }}/{{ binary_name }} version))"
+
+# Run the physical-device daemon using the freshly built binary.
+serve: build
+    "./{{ bin_dir }}/{{ binary_name }}" serve
+
+# Open the TUI using the freshly built binary. Start `just serve` separately.
+ui: build
+    "./{{ bin_dir }}/{{ binary_name }}" ui
 
 # Smoke demo: build, print version, status against a temporary state directory.
 demo: build

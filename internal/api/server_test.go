@@ -66,7 +66,7 @@ func startTestServer(t *testing.T) (*api.Server, string) {
 }
 
 func TestStatusAndDevices(t *testing.T) {
-	_, sock := startTestServer(t)
+	srv, sock := startTestServer(t)
 	client := api.DialHTTP(sock)
 	resp, err := client.Get("http://unix/v1/status")
 	if err != nil {
@@ -75,6 +75,13 @@ func TestStatusAndDevices(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatal(resp.Status)
+	}
+	var status map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status["recordings_dir"] != srv.Layout.RecordingsDir() || status["journals_dir"] != srv.Layout.JournalsDir() {
+		t.Fatalf("artifact paths missing from status: %v", status)
 	}
 	resp, err = client.Get("http://unix/v1/devices")
 	if err != nil {

@@ -12,8 +12,8 @@ generic—no Habitat runtime dependency and no Samantha-specific schema.
 discovers the exact Linux receiver, groups USB Audio and evdev control, opens
 an explicit malgo source, records create-only WAVs, exposes API/CLI/SDK
 workflows, and provides an interactive TUI. Hardware-free mode is explicit
-(`MICBRIDGE_FAKE=1`). Final binding-to-WAV HIL using two LARK M2 transmitter
-double presses remains a release gate.
+(`MICBRIDGE_FAKE=1`). The physical binding-to-WAV path has passed with two
+LARK M2 transmitter double presses.
 
 ## Supported host (v0.1 focus)
 
@@ -50,14 +50,14 @@ just demo        # version + status against a temporary state directory
 Expected smoke output (version string may change):
 
 ```text
-micbridge 0.0.0-dev
+micbridge 0.0.0-dev+<source-commit>
 {
   "healthy": true,
   "journals_dir": "/tmp/micbridge-demo..../journals",
   "name": "micbridge",
   "recordings_dir": "/tmp/micbridge-demo..../recordings",
   "state_dir": "/tmp/micbridge-demo....",
-  "version": "0.0.0-dev"
+  "version": "0.0.0-dev+<source-commit>"
 }
 ```
 
@@ -91,7 +91,8 @@ MICBRIDGE_STATE_DIR=$(mktemp -d) ./bin/micbridge status
 | `just test` / `just test-race` | Tests (hardware-free) |
 | `just demo` | Complete fake-daemon status smoke in a temp state dir |
 | `just review` | Lint + race (CI review gate) |
-| `just install` | Install to `GOBIN` |
+| `just install` | Build, copy to `GOBIN`, verify bytes, and print installed version/path |
+| `just serve` / `just ui` | Run the physical daemon / interactive TUI |
 
 CI runs the same recipes. Details: [docs/ci.md](docs/ci.md).
 
@@ -111,7 +112,14 @@ MICBRIDGE_FAKE=1 micbridge serve
 ```
 
 With the receiver attached, omit `MICBRIDGE_FAKE`; physical mode is the
-default. Run `micbridge ui` for the interactive recorder.
+default. Run `micbridge serve` in one terminal, then bare `micbridge` (or
+`micbridge ui`) in another. Arm once per daemon session; after each finalized
+recording the next transmitter double-press starts a new one directly.
+
+By default state is stable under `$XDG_STATE_HOME/micbridge` or
+`$HOME/.local/state/micbridge`. Finalized native 48 kHz/stereo/24-bit WAV files
+are shown in the TUI and stored under its `recordings/` directory. Override the
+root with an absolute `MICBRIDGE_STATE_DIR` when needed.
 
 Never wire HIL into `just check`. Physical validation is bounded and optional.
 
@@ -143,7 +151,7 @@ driver. See [docs/implementation-baseline.md](docs/implementation-baseline.md).
 | Path / pattern | Purpose |
 |---|---|
 | `bin/`, `dist/`, `micbridge` | build outputs |
-| `.micbridge/`, `state/` | local state roots |
+| `.micbridge/`, `state/` | explicitly selected development state roots |
 | `recordings/`, `journals/`, `*.wav`, `*.journal` | capture artifacts |
 | `coverage.out` | test coverage |
 | `*.sock` | local sockets |

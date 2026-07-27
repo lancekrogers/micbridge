@@ -5,7 +5,8 @@ set working-directory := ".."
 bin_dir := "bin"
 binary_name := "micbridge"
 cmd_pkg := "./cmd/micbridge"
-version := env_var_or_default("VERSION", "0.0.0-dev")
+commit := `git rev-parse --short=12 HEAD`
+version := env_var_or_default("VERSION", "0.0.0-dev+" + commit)
 
 # Build ./bin/micbridge (same as root `just build`).
 default-build:

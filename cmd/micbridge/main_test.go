@@ -19,6 +19,9 @@ import (
 )
 
 func TestVersionAndHelp(t *testing.T) {
+	if got := defaultArgs(nil); len(got) != 1 || got[0] != "ui" {
+		t.Fatalf("bare command routes to %v, want ui", got)
+	}
 	if code := run([]string{"version"}); code != client.ExitOK {
 		t.Fatal(code)
 	}
@@ -75,6 +78,19 @@ func TestCLIDaemonUnavailable(t *testing.T) {
 	}
 }
 
+func TestDefaultStateLayoutIsStableAndAbsolute(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("MICBRIDGE_STATE_DIR", "")
+	t.Setenv("XDG_STATE_HOME", xdg)
+	layout, err := stateLayout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(xdg, "micbridge"); layout.Root != want {
+		t.Fatalf("state root = %q, want %q", layout.Root, want)
+	}
+}
+
 func TestServeOnce(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("MICBRIDGE_STATE_DIR", dir)
@@ -89,7 +105,7 @@ func TestServeOnce(t *testing.T) {
 	_ = os.Remove(filepath.Join(dir, "s.sock"))
 }
 
-func TestTwoPressControlPathCreatesFinalizedWAV(t *testing.T) {
+func TestControlRemainsReadyAcrossRecordingsAfterOneArm(t *testing.T) {
 	root := t.TempDir()
 	recDir := filepath.Join(root, "recordings")
 	journalDir := filepath.Join(root, "journals")
@@ -127,6 +143,17 @@ func TestTwoPressControlPathCreatesFinalizedWAV(t *testing.T) {
 	controls <- driver.ControlEvent{Type: "pressed", Control: "primary", PressID: "p2"}
 	waitForState(t, machine, recording.StateCompleted)
 	if err := recording.ValidateWAV(filepath.Join(recDir, armed.SessionID+".wav")); err != nil {
+		t.Fatal(err)
+	}
+	controls <- driver.ControlEvent{Type: "pressed", Control: "primary", PressID: "p3"}
+	waitForState(t, machine, recording.StateRecording)
+	secondID := machine.Snapshot().SessionID
+	if secondID == armed.SessionID {
+		t.Fatalf("second recording reused session %q", secondID)
+	}
+	controls <- driver.ControlEvent{Type: "pressed", Control: "primary", PressID: "p4"}
+	waitForState(t, machine, recording.StateCompleted)
+	if err := recording.ValidateWAV(filepath.Join(recDir, secondID+".wav")); err != nil {
 		t.Fatal(err)
 	}
 }

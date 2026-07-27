@@ -29,13 +29,21 @@ func TestWAVSinkMachineCreatesFinalizedSyntheticRecording(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := machine.Submit(ctx, recording.Command{Name: recording.CmdStart, Actor: recording.ActorBinding}); err != nil {
+	if _, err := machine.Submit(ctx, recording.Command{
+		Name: recording.CmdStart, Actor: recording.ActorBinding, Reason: "receiver pressed",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := machine.Submit(ctx, recording.Command{Name: recording.CmdStop, Actor: recording.ActorBinding}); err != nil {
+	completed, err := machine.Submit(ctx, recording.Command{
+		Name: recording.CmdStop, Actor: recording.ActorBinding, Reason: "receiver pressed",
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	final := filepath.Join(recDir, armed.SessionID+".wav")
+	if completed.OutputPath != final {
+		t.Fatalf("completed output path = %q, want %q", completed.OutputPath, final)
+	}
 	if err := recording.ValidateWAV(final); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +52,17 @@ func TestWAVSinkMachineCreatesFinalizedSyntheticRecording(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(journalDir, armed.SessionID+".journal")); err != nil {
 		t.Fatal(err)
+	}
+	records, err := recording.ReadJournal(filepath.Join(journalDir, armed.SessionID+".journal"), armed.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) < 2 || records[1].Actor != recording.ActorBinding || records[1].Reason != "receiver pressed" {
+		t.Fatalf("start provenance missing from journal: %+v", records)
+	}
+	last := records[len(records)-1]
+	if last.Step != "finalized" || last.Actor != recording.ActorBinding || last.Reason != "receiver pressed" {
+		t.Fatalf("stop provenance missing from journal: %+v", last)
 	}
 }
 

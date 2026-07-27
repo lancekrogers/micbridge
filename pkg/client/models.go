@@ -163,12 +163,13 @@ const (
 )
 
 type RecordingSnapshot struct {
-	SessionID string         `json:"session_id"`
-	State     RecordingState `json:"state"`
-	Actor     RecordingActor `json:"actor"`
-	Reason    string         `json:"reason,omitempty"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Title     string         `json:"title,omitempty"`
+	SessionID  string         `json:"session_id"`
+	State      RecordingState `json:"state"`
+	Actor      RecordingActor `json:"actor"`
+	Reason     string         `json:"reason,omitempty"`
+	OutputPath string         `json:"output_path,omitempty"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	Title      string         `json:"title,omitempty"`
 }
 
 type Sequence uint64

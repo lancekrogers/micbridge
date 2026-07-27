@@ -1,6 +1,9 @@
 package storage
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestNewLayoutRequiresRoot(t *testing.T) {
 	if _, err := NewLayout(""); err == nil {
@@ -18,5 +21,27 @@ func TestLayoutSubpaths(t *testing.T) {
 	}
 	if got, want := l.JournalsDir(), "/tmp/micbridge-state/journals"; got != want {
 		t.Fatalf("JournalsDir = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultStateRootUsesXDGStateHome(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", xdg)
+	root, err := DefaultStateRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(xdg, "micbridge"); root != want {
+		t.Fatalf("default state root = %q, want %q", root, want)
+	}
+}
+
+func TestNewLayoutMakesRelativeRootAbsolute(t *testing.T) {
+	layout, err := NewLayout("relative-state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(layout.Root) {
+		t.Fatalf("state root is not absolute: %q", layout.Root)
 	}
 }

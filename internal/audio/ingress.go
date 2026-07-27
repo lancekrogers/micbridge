@@ -51,10 +51,12 @@ type Ingress struct {
 	closed atomic.Uint32
 }
 
-// NewIngress preallocates capacity frames of frameBytes each.
-func NewIngress(capacity, frameBytes int, policy IngressPolicy) (*Ingress, error) {
-	if capacity < 1 || frameBytes < 1 {
-		return nil, fmt.Errorf("audio: ingress capacity and frameBytes must be positive")
+// NewIngress preallocates capacity slots of maxFrameBytes each. Callback sizes
+// may vary by backend even when a period size was requested, so any non-empty
+// chunk up to the configured bound is accepted without allocation.
+func NewIngress(capacity, maxFrameBytes int, policy IngressPolicy) (*Ingress, error) {
+	if capacity < 1 || maxFrameBytes < 1 {
+		return nil, fmt.Errorf("audio: ingress capacity and maxFrameBytes must be positive")
 	}
 	if policy != PolicyDropNewest {
 		return nil, fmt.Errorf("audio: ingress policy %d is not safe for SPSC callback ownership", policy)
@@ -65,11 +67,11 @@ func NewIngress(capacity, frameBytes int, policy IngressPolicy) (*Ingress, error
 		metaTs:  make([]int64, capacity),
 		metaN:   make([]int32, capacity),
 		cap:     uint64(capacity),
-		frameB:  frameBytes,
+		frameB:  maxFrameBytes,
 		policy:  policy,
 	}
 	for i := range in.slots {
-		in.slots[i] = make([]byte, frameBytes)
+		in.slots[i] = make([]byte, maxFrameBytes)
 	}
 	return in, nil
 }
@@ -79,7 +81,7 @@ func (in *Ingress) PushFromCallback(pcm []byte, ts int64) bool {
 	if in.closed.Load() == 1 {
 		return false
 	}
-	if len(pcm) != in.frameB {
+	if len(pcm) == 0 || len(pcm) > in.frameB {
 		in.drop.Add(1)
 		return false
 	}

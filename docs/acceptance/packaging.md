@@ -4,7 +4,7 @@
 
 ```bash
 just build
-just install   # copies bin/micbridge to GOBIN
+just install   # copies to GOBIN, byte-verifies, prints source-stamped version
 ```
 
 Or:
@@ -41,6 +41,9 @@ the native audio path is CGO-backed and other targets have not been accepted.
 | `micbridge.sock` | 0600 | Local API |
 | `$MICBRIDGE_STATE_DIR/recordings/` | 0700 | Create-only WAVs |
 | `$MICBRIDGE_STATE_DIR/journals/` | 0700 | Session journals |
+
+When `MICBRIDGE_STATE_DIR` is unset, the state root is
+`$XDG_STATE_HOME/micbridge` or `$HOME/.local/state/micbridge`.
 
 ## Permissions principles
 

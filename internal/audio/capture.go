@@ -6,6 +6,15 @@ import (
 	"sync"
 )
 
+// CaptureStats reports loss and throughput at the real-time callback boundary.
+// A finalized recording must have zero dropped frames.
+type CaptureStats struct {
+	Callbacks      uint64
+	FramesAccepted uint64
+	FramesDropped  uint64
+	BytesAccepted  uint64
+}
+
 // Capture owns one native capture stream and its callback-to-worker handoff.
 type Capture struct {
 	Source       Source
@@ -18,6 +27,7 @@ type Capture struct {
 	startFn  func() error
 	closeFn  func() error
 	overflow func() uint64
+	stats    func() CaptureStats
 }
 
 // NewCapture returns an inactive capture value for compatibility.
@@ -67,6 +77,14 @@ func (c *Capture) OverflowCount() uint64 {
 		return 0
 	}
 	return c.overflow()
+}
+
+// Stats returns a point-in-time capture-health snapshot.
+func (c *Capture) Stats() CaptureStats {
+	if c.stats == nil {
+		return CaptureStats{}
+	}
+	return c.stats()
 }
 
 // OpenResult is returned when a source is selected for capture setup.

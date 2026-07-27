@@ -100,6 +100,15 @@ func (s *WAVSink) prepare(ctx context.Context, sessionID, recordingsDir, artifac
 }
 
 func (s *WAVSink) Start(ctx context.Context, sessionID string) error {
+	return s.start(ctx, sessionID, Command{})
+}
+
+// StartCommand starts capture and persists who requested the transition.
+func (s *WAVSink) StartCommand(ctx context.Context, sessionID string, cmd Command) error {
+	return s.start(ctx, sessionID, cmd)
+}
+
+func (s *WAVSink) start(ctx context.Context, sessionID string, cmd Command) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -153,7 +162,9 @@ func (s *WAVSink) Start(ctx context.Context, sessionID string) error {
 	journal := s.journal
 	s.mu.Unlock()
 	if journal != nil {
-		return journal.Append(JournalRecord{SessionID: sessionID, Step: "recording"})
+		return journal.Append(JournalRecord{
+			SessionID: sessionID, Step: "recording", Actor: cmd.Actor, Reason: cmd.Reason,
+		})
 	}
 	return nil
 }
@@ -179,6 +190,15 @@ func (s *WAVSink) writePCM(pcm []byte) error {
 }
 
 func (s *WAVSink) Stop(ctx context.Context, sessionID string) error {
+	return s.stop(ctx, sessionID, Command{})
+}
+
+// StopCommand finalizes capture and persists who requested the transition.
+func (s *WAVSink) StopCommand(ctx context.Context, sessionID string, cmd Command) error {
+	return s.stop(ctx, sessionID, cmd)
+}
+
+func (s *WAVSink) stop(ctx context.Context, sessionID string, cmd Command) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -207,6 +227,8 @@ func (s *WAVSink) Stop(ctx context.Context, sessionID string) error {
 		if err := s.journal.Append(JournalRecord{
 			SessionID: sessionID,
 			Step:      "synced",
+			Actor:     cmd.Actor,
+			Reason:    cmd.Reason,
 			Partial:   s.writer.PartialPath(),
 			DataBytes: s.writer.DataBytes(),
 		}); err != nil {
@@ -221,6 +243,8 @@ func (s *WAVSink) Stop(ctx context.Context, sessionID string) error {
 		if err := s.journal.Append(JournalRecord{
 			SessionID: sessionID,
 			Step:      "finalized",
+			Actor:     cmd.Actor,
+			Reason:    cmd.Reason,
 			Final:     meta.Path,
 			DataBytes: meta.DataBytes,
 			CRC32:     meta.CRC32,

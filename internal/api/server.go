@@ -200,6 +200,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.Layout != nil {
 		payload["state_dir"] = s.Layout.Root
+		payload["recordings_dir"] = s.Layout.RecordingsDir()
+		payload["journals_dir"] = s.Layout.JournalsDir()
 	}
 	if s.Machine != nil {
 		snap := s.Machine.Snapshot()

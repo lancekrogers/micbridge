@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -37,15 +38,16 @@ type tickMsg time.Time
 
 // Model is the responsive recorder screen.
 type Model struct {
-	service  Service
-	width    int
-	height   int
-	healthy  bool
-	snapshot client.RecordingSnapshot
-	devices  []client.Device
-	pending  string
-	busy     bool
-	err      string
+	service       Service
+	width         int
+	height        int
+	healthy       bool
+	snapshot      client.RecordingSnapshot
+	devices       []client.Device
+	recordingsDir string
+	pending       string
+	busy          bool
+	err           string
 }
 
 func NewModel(service Service) Model {
@@ -77,7 +79,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pending = ""
 		case "a":
 			if !m.busy && (m.snapshot.State == client.StateIdle ||
-				m.snapshot.State == client.StateCompleted ||
 				m.snapshot.State == client.StateFailed) {
 				m.pending = "arm"
 			}
@@ -86,9 +87,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 			switch m.snapshot.State {
-			case client.StateIdle, client.StateCompleted, client.StateFailed:
+			case client.StateIdle, client.StateFailed:
 				m.pending = "arm"
-			case client.StateArmed:
+			case client.StateArmed, client.StateCompleted:
 				m.pending = "start"
 			case client.StateRecording:
 				m.pending = "stop"
@@ -106,13 +107,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = false
 		if msg.err != nil {
 			m.healthy = false
-			m.err = msg.err.Error()
+			m.err = "Daemon unavailable. Start it with `micbridge serve` in another terminal."
 			break
 		}
 		m.err = ""
 		m.devices = msg.devices
 		if healthy, ok := msg.status["healthy"].(bool); ok {
 			m.healthy = healthy
+		}
+		if recordingsDir, ok := msg.status["recordings_dir"].(string); ok {
+			m.recordingsDir = recordingsDir
 		}
 		if raw, ok := msg.status["recording"]; ok {
 			encoded, _ := json.Marshal(raw)
@@ -218,6 +222,9 @@ func (m Model) View() string {
 		"State     " + state,
 		"Session   " + fallback(m.snapshot.SessionID, "—"),
 		"Daemon    " + health,
+		"File      " + artifactFile(m.snapshot),
+		"Folder    " + artifactFolder(m.snapshot, m.recordingsDir, width-18),
+		"Last via  " + transitionSource(m.snapshot),
 	}, "\n"))
 	devicePanel := panelStyle(width).Render("DEVICE\n\n" + strings.Join(deviceLines, "\n"))
 
@@ -230,12 +237,21 @@ func (m Model) View() string {
 			"RECORDING", "", "State     " + state,
 			"Session   " + fallback(m.snapshot.SessionID, "—"),
 			"Daemon    " + health,
+			"File      " + artifactFile(m.snapshot),
+			"Folder    " + artifactFolder(m.snapshot, m.recordingsDir, panelWidth-18),
+			"Last via  " + transitionSource(m.snapshot),
 		}, "\n"))
 		devicePanel = panelStyle(panelWidth).Render("DEVICE\n\n" + strings.Join(deviceLines, "\n"))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, recordingPanel, " ", devicePanel)
 	}
 
 	footer := "↵/space action  a arm  r refresh  q quit"
+	if m.snapshot.State == client.StateCompleted {
+		footer = "Ready for next recording • ↵/space start  r refresh  q quit"
+		if hasLARKM2(m.devices) {
+			footer = "Ready for next double-press • ↵/space start  r refresh  q quit"
+		}
+	}
 	if m.pending != "" {
 		footer = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FDCB6E")).
 			Render(fmt.Sprintf("Confirm %s?  y yes  n/esc cancel", m.pending))
@@ -246,6 +262,47 @@ func (m Model) View() string {
 		footer += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF7675")).Render("Error: "+m.err)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
+}
+
+func transitionSource(snapshot client.RecordingSnapshot) string {
+	if snapshot.Actor == "" {
+		return "—"
+	}
+	if snapshot.Reason == "" {
+		return string(snapshot.Actor)
+	}
+	return string(snapshot.Actor) + " • " + snapshot.Reason
+}
+
+func artifactFile(snapshot client.RecordingSnapshot) string {
+	if snapshot.OutputPath == "" {
+		return "—"
+	}
+	return filepath.Base(snapshot.OutputPath)
+}
+
+func artifactFolder(snapshot client.RecordingSnapshot, recordingsDir string, width int) string {
+	path := recordingsDir
+	if snapshot.OutputPath != "" {
+		path = filepath.Dir(snapshot.OutputPath)
+	}
+	path = fallback(path, "—")
+	runes := []rune(path)
+	if width < 12 || len(runes) <= width {
+		return path
+	}
+	left := (width - 1) / 2
+	right := width - left - 1
+	return string(runes[:left]) + "…" + string(runes[len(runes)-right:])
+}
+
+func hasLARKM2(devices []client.Device) bool {
+	for _, device := range devices {
+		if device.Identity.DriverID == "hollyland-3547-0007" {
+			return true
+		}
+	}
+	return false
 }
 
 func panelStyle(width int) lipgloss.Style {
