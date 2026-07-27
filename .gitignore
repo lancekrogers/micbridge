@@ -8,6 +8,7 @@
 
 # Local runtime state
 /.micbridge/
+/.micbridge-live/
 /state/
 *.sock
 
@@ -30,3 +31,4 @@
 .vscode/
 *.swp
 *~
+
