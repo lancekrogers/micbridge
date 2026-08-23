@@ -4,10 +4,9 @@
 
 Do **not** open a public issue for security problems.
 
-Use GitHub private vulnerability reporting if enabled for this repository. If
-it is not available, contact the repository owner through a private channel
-and include steps to reproduce. Redact serial numbers, private filesystem
-paths, API tokens, and any audio content.
+Use [GitHub private vulnerability reporting](https://github.com/lancekrogers/micbridge/security/advisories/new).
+Include steps to reproduce. Redact serial numbers, private filesystem paths,
+API tokens, and any audio content.
 
 ## Product security boundaries
 

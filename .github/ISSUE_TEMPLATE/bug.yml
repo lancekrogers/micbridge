@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Micbridge did not do what the docs say.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do **not** attach recordings, journals, serials, or private filesystem paths.
+        Redact `doctor` and `devices` JSON before pasting.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: micbridge version
+      placeholder: output of `micbridge version`
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: e.g. Arch Linux, Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware involved
+      options:
+        - None (fake driver / unit tests)
+        - Hollyland LARK M2 USB-C receiver (3547:0007)
+        - Other (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Commands, TUI keys, or API calls. Prefer `--json` output with secrets and paths redacted.
+    validations:
+      required: true

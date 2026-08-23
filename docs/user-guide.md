@@ -1,14 +1,58 @@
-# Micbridge user guide (v0.1)
+# Micbridge user guide
+
+Install notes live in the [README](../README.md). This page is the recording
+workflow.
 
 ## What you need
 
-- Linux host with ordinary-user permissions
+- Linux host, ordinary-user permissions (no root daemon)
 - Optional: Hollyland LARK M2 USB-C receiver **3547:0007**
-- `micbridge` installed (`just install` or `go install`)
+- `micbridge` on your `PATH` (`just install` or `go build`)
 
 Hardware is not required to explore the fake driver path.
 
-## Five-minute path (fake / no hardware)
+## Record with a LARK M2
+
+1. Plug in the receiver.
+2. Run `micbridge doctor` and fix any path/permission hints.
+3. Confirm the device appears once under a stable ID (not ALSA card numbers):
+
+   ```bash
+   micbridge serve          # terminal 1
+   micbridge devices --json # terminal 2
+   ```
+
+4. Run `micbridge setup` if you want the guided binding plan. The default
+   primary-press binding is complete only when audio and control are callable.
+5. Run `micbridge` (or `micbridge ui`) and arm once with `a`, then `y`.
+6. **Double-press the button on either LARK M2 microphone** to start, then
+   double-press either microphone again to stop.
+7. The completed screen shows the finalized WAV. The next double-press starts
+   another recording without re-arming.
+
+One press only toggles LARK M2 noise cancellation and does not send a host
+control event.
+
+**Side effect:** the transmitter double-press is also Consumer Control Volume
+Up on the desktop. Micbridge declares this passively and does not exclusive-grab
+the device by default.
+
+### Device access (udev)
+
+If `doctor` cannot open the audio or control nodes, install a **device-scoped**
+`uaccess` rule for this VID:PID only, then replug the receiver:
+
+```udev
+# Example only — review before installing. Scope to 3547:0007.
+SUBSYSTEM=="sound", ATTRS{idVendor}=="3547", ATTRS{idProduct}=="0007", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="3547", ATTRS{idProduct}=="0007", TAG+="uaccess"
+```
+
+Do not add a root daemon, do not grant the whole `input` group, and do not
+leave device nodes world-writable. `micbridge doctor` prints this hint when
+access fails.
+
+## Five-minute path (no hardware)
 
 ```bash
 # terminal 1
@@ -29,26 +73,6 @@ micbridge record
 micbridge stop
 ```
 
-## Physical LARK M2 receiver (3547:0007)
-
-1. Plug in the receiver.
-2. Run `micbridge doctor` and fix any path/permission hints (udev `uaccess` for this VID:PID only).
-3. Confirm the device appears once under a stable ID (not ALSA card numbers).
-4. Run `micbridge setup`; the default primary-press binding is complete only
-   when audio/control capabilities are callable.
-5. Run `micbridge` (or `micbridge ui`) and arm once with `a`, then `y`.
-6. **Double-press the button on either LARK M2 microphone** to start, then
-   double-press either microphone again to stop.
-7. The completed screen shows the finalized WAV. The control remains ready:
-   the next double-press starts another recording without re-arming.
-
-One press only toggles LARK M2 noise cancellation and does not send a host
-control event.
-
-**Side effect:** the transmitter double press is also Consumer Control Volume
-Up on the host. Micbridge declares this passively and does not exclusive-grab
-by default.
-
 ## Recording location
 
 The default state root does not depend on the directory where the daemon was
@@ -62,15 +86,23 @@ $HOME/.local/state/micbridge
 
 Final WAV files are under `recordings/`; recovery journals are under
 `journals/`. Journals identify whether start and stop came from the microphone
-binding, CLI, API, or system. Both the status API and TUI show the resolved absolute path.
-Older development runs that explicitly used `.micbridge` remain in that
-directory and are not moved or deleted.
+binding, CLI, API, or system. Both the status API and TUI show the resolved
+absolute path.
+
+Override the root with an absolute `MICBRIDGE_STATE_DIR` when needed. Older
+development runs that explicitly used `.micbridge` remain in that directory
+and are not moved or deleted.
+
+The live Hollyland path records its measured native 48 kHz, stereo, 24-bit PCM
+shape. Capture buffering favors continuity over monitoring latency, and any
+dropped callback frames fail the session visibly instead of publishing a
+damaged WAV as completed.
 
 ## Recovery
 
-Interrupted sessions leave `*.wav.partial` under the state recordings directory
-plus a `.journal`. Run `micbridge recover --json` to classify them; never
-delete partials until you have reviewed them.
+Interrupted sessions leave `*.wav.partial` under the recordings directory plus
+a `.journal`. Run `micbridge recover --json` to classify them. Do not delete
+partials until you have reviewed them.
 
 ## TUI keys
 
@@ -81,13 +113,10 @@ delete partials until you have reviewed them.
 - `r`: refresh
 - `q`: quit
 
-The live Hollyland path records its measured native 48 kHz, stereo, 24-bit PCM
-shape. Capture buffering favors continuity over monitoring latency, and any
-dropped callback frames fail the session visibly instead of publishing a
-damaged WAV as completed.
-
 ## Privacy
 
-- Local Unix socket only by default
+- Local Unix socket only by default (`0600` in a `0700` directory)
 - No cloud upload
 - Do not share recordings, serials, or private paths in bug reports
+
+See [SECURITY.md](../SECURITY.md) for reporting rules.

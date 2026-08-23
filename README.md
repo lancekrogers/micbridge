@@ -1,184 +1,159 @@
-# micbridge
+# Micbridge
 
-Programmable wireless microphone controls and local recording API.
+[![CI](https://github.com/lancekrogers/micbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/lancekrogers/micbridge/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](go.mod)
 
-Micbridge is a local-first Go service: it discovers supported USB receivers,
-exposes a versioned device-independent API, and records recoverable WAV
-sessions. The first evidence-backed driver targets the Hollyland **LARK M2**
-USB-C receiver at USB **`3547:0007`** on Linux. The product contract stays
-generic—no Habitat runtime dependency and no Samantha-specific schema.
+Record from a wireless microphone onto your Linux machine. Start and stop with the transmitter button, a terminal UI, or a local API. Audio never leaves the box.
 
-**Status:** v0.1 review candidate (`v0.0.0-dev`, not released). The daemon
-discovers the exact Linux receiver, groups USB Audio and evdev control, opens
-an explicit malgo source, records create-only WAVs, exposes API/CLI/SDK
-workflows, and provides an interactive TUI. Hardware-free mode is explicit
-(`MICBRIDGE_FAKE=1`). The physical binding-to-WAV path has passed with two
-LARK M2 transmitter double presses.
+The first supported receiver is the Hollyland **LARK M2** USB-C dongle at USB **`3547:0007`**.
 
-## Supported host (v0.1 focus)
+![Micbridge recorder TUI](docs/vhs/tui.gif)
 
-| Surface | v0.1 |
+## Status
+
+Early public **v0.1**. Linux only. One proven device. The binary still reports `0.0.0-dev`; there is no tagged GitHub release yet.
+
+| Works today | Not in this release |
 |---|---|
-| OS | **Linux** (primary; CI on Ubuntu 24.04) |
-| Go | version in `go.mod` (**1.26+**) |
-| Task runner | [just](https://github.com/casey/just) |
-| Audio | miniaudio via `gen2brain/malgo` (cgo) |
-| Control | Linux evdev under exact USB-parent grouping |
-| Transport | per-user Unix socket under `$XDG_RUNTIME_DIR` |
+| Discover the exact LARK M2 USB-C receiver | macOS / Windows |
+| Double-press either transmitter to start/stop a WAV | Other Hollyland receivers or brands |
+| Recoverable recordings, doctor, CLI, TUI | Host control of noise cancellation |
+| Hardware-free fake driver (`MICBRIDGE_FAKE=1`) | Distro packages / Homebrew |
+| Local Unix-socket API and Go client | Cloud, accounts, or remote control |
 
-macOS/Windows schemas may appear early; support is claimed only after
-platform-specific evidence.
+## Install
 
-## Quick start (no hardware)
+Linux x86_64, **Go 1.26+**, a C compiler, and ALSA headers. Capture uses miniaudio via cgo.
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install --yes build-essential pkg-config libasound2-dev
+
+# Arch
+sudo pacman -S --needed base-devel alsa-lib
+```
+
+From source ([just](https://github.com/casey/just) optional):
 
 ```bash
 git clone https://github.com/lancekrogers/micbridge.git
 cd micbridge
-
-# Optional Linux packages (required once malgo/cgo capture is linked; CI installs them)
-# Debian/Ubuntu:
-#   sudo apt-get install --yes build-essential pkg-config libasound2-dev
-# Arch:
-#   sudo pacman -S --needed base-devel alsa-lib
-
-just bootstrap   # go version + go mod tidy
-just check       # gofmt check, go vet, unit tests
-just build       # writes bin/micbridge
-just demo        # version + status against a temporary state directory
+just install    # builds, copies to GOBIN, prints the path
 ```
 
-Expected smoke output (version string may change):
+Without just:
+
+```bash
+go build -o bin/micbridge ./cmd/micbridge
+install -m 755 bin/micbridge "$(go env GOPATH)/bin/micbridge"
+```
+
+`go install github.com/lancekrogers/micbridge/cmd/micbridge@latest` works the same way once you have the C toolchain and ALSA headers.
+
+## Record with a LARK M2
+
+1. Plug in the USB-C receiver.
+2. Run `micbridge doctor` and apply the device-scoped udev hint if access fails. Do not add a root daemon or join the `input` group.
+3. Start the daemon, then the UI:
+
+```bash
+# terminal 1
+micbridge serve
+
+# terminal 2
+micbridge          # same as: micbridge ui
+```
+
+4. Arm once (`a`, then `y`).
+5. **Double-press either transmitter** to start. Double-press again to stop.
+6. After a take finishes, the next double-press starts another recording. No re-arm.
+
+Finished files are 48 kHz / stereo / 24-bit WAV under:
 
 ```text
-micbridge 0.0.0-dev+<source-commit>
-{
-  "healthy": true,
-  "journals_dir": "/tmp/micbridge-demo..../journals",
-  "name": "micbridge",
-  "recordings_dir": "/tmp/micbridge-demo..../recordings",
-  "state_dir": "/tmp/micbridge-demo....",
-  "version": "0.0.0-dev+<source-commit>"
+$XDG_STATE_HOME/micbridge/recordings
+# or, if XDG_STATE_HOME is unset:
+$HOME/.local/state/micbridge/recordings
+```
+
+A **single** press on a LARK M2 only toggles onboard noise cancellation and never reaches the host. The double-press also sends **Volume-Up** to the desktop; Micbridge reports that side effect and does not swallow the key.
+
+Full walkthrough, TUI keys, and recovery: [docs/user-guide.md](docs/user-guide.md).
+
+## Try it without hardware
+
+```bash
+# terminal 1
+MICBRIDGE_FAKE=1 micbridge serve
+
+# terminal 2
+micbridge ui
+```
+
+Or `just demo` for a one-shot version/status smoke in a temp directory.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `micbridge serve` | Local daemon (physical devices by default) |
+| `micbridge` / `ui` | Interactive recorder |
+| `micbridge doctor` | Permissions and device hints |
+| `micbridge devices` | List discovered devices |
+| `micbridge setup` | Guided binding/setup plan |
+| `micbridge record arm` / `record` / `stop` | Scripted recording |
+| `micbridge recover` | Classify interrupted sessions |
+| `micbridge events` | Stream daemon events |
+| `micbridge status` / `version` | Health and version |
+
+Add `--json` (or `MICBRIDGE_JSON=1`) for machine-readable output.
+
+## Go client
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/lancekrogers/micbridge/pkg/client"
+)
+
+func main() {
+	sock := os.Getenv("MICBRIDGE_SOCK")
+	if sock == "" {
+		sock = os.Getenv("XDG_RUNTIME_DIR") + "/micbridge/micbridge.sock"
+	}
+	c := client.New(sock)
+	status, err := c.Status(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println(status["version"], status["recordings_dir"])
 }
 ```
 
-CLI without just:
-
-```bash
-go test ./...
-go build -o bin/micbridge ./cmd/micbridge
-MICBRIDGE_STATE_DIR=$(mktemp -d) ./bin/micbridge version
-MICBRIDGE_STATE_DIR=$(mktemp -d) ./bin/micbridge status
-```
-
-### Common dependency failures
-
-| Symptom | Fix |
-|---|---|
-| `just: command not found` | Install just; or use the `go` commands above |
-| Wrong Go version | Install Go ≥ `go.mod`; `go version` should report 1.26+ |
-| `cgo: C compiler "gcc" not found` (later capture builds) | Install `build-essential` / `base-devel` |
-| ALSA / miniaudio link errors (later) | Install `libasound2-dev` or `alsa-lib` + pkg-config |
-| `gofmt needed on:` from `just check` | Run `gofmt -s -w .` |
-| golangci-lint missing | `just review` falls back to vet; install lint for full parity |
-
-## Developer commands
-
-| Recipe | Purpose |
-|---|---|
-| `just bootstrap` | Toolchain check + module tidy |
-| `just build` | Build `bin/micbridge` |
-| `just check` | Format gate + vet + unit tests |
-| `just test` / `just test-race` | Tests (hardware-free) |
-| `just demo` | Complete fake-daemon status smoke in a temp state dir |
-| `just review` | Lint + race (CI review gate) |
-| `just install` | Build, copy to `GOBIN`, verify bytes, and print installed version/path |
-| `just serve` / `just ui` | Run the physical daemon / interactive TUI |
-
-CI runs the same recipes. Details: [docs/ci.md](docs/ci.md).
-
-## What is real vs fake today
-
-| Path | Needs hardware? | Notes |
-|---|---|---|
-| `micbridge version` / `status` | No | Bootstrap shells; temp or `MICBRIDGE_STATE_DIR` |
-| Unit / race tests | No | Deterministic clocks, IDs, synthetic PCM |
-| Native audio capture | Receiver for live path | Explicit selected source; no default-mic fallback |
-| Physical Hollyland two-press | **Yes** | Bounded final HIL; not part of normal CI |
-
-Start the deterministic hardware-free daemon with:
-
-```bash
-MICBRIDGE_FAKE=1 micbridge serve
-```
-
-With the receiver attached, omit `MICBRIDGE_FAKE`; physical mode is the
-default. Run `micbridge serve` in one terminal, then bare `micbridge` (or
-`micbridge ui`) in another. Arm once per daemon session; after each finalized
-recording the next transmitter double-press starts a new one directly.
-
-By default state is stable under `$XDG_STATE_HOME/micbridge` or
-`$HOME/.local/state/micbridge`. Finalized native 48 kHz/stereo/24-bit WAV files
-are shown in the TUI and stored under its `recordings/` directory. Override the
-root with an absolute `MICBRIDGE_STATE_DIR` when needed.
-
-Never wire HIL into `just check`. Physical validation is bounded and optional.
-
-## Repository layout
-
-```text
-cmd/micbridge/          CLI entry (version, status, …)
-internal/core/          shared product constants/contracts
-internal/driver/        compiled-in driver registry boundary
-internal/event/         ordered event bus boundary
-internal/binding/       control → action mapping
-internal/recording/     session / recovery boundary
-internal/audio/         capture boundary (malgo later)
-internal/storage/       state root / artifact paths
-internal/api/           local control API handlers
-internal/clock|idgen|queue/   injectable seams
-internal/testsupport/   deterministic test helpers (tests only)
-docs/                   baseline, CI notes
-.justfiles/             modular just recipes
-.github/workflows/      hardware-free CI
-```
-
-Package boundaries follow design WI-66237e. Hollyland-specific code must not
-enter the generic core; API and recording packages do not import a concrete
-driver. See [docs/implementation-baseline.md](docs/implementation-baseline.md).
-
-## Generated and runtime files (do not commit)
-
-| Path / pattern | Purpose |
-|---|---|
-| `bin/`, `dist/`, `micbridge` | build outputs |
-| `.micbridge/`, `state/` | explicitly selected development state roots |
-| `recordings/`, `journals/`, `*.wav`, `*.journal` | capture artifacts |
-| `coverage.out` | test coverage |
-| `*.sock` | local sockets |
-
-`.gitignore` already covers these. **Never** commit user recordings, serials,
-or live audio—only synthetic/licensed fixtures.
-
-## Evidence and privacy
-
-- Match Hollyland only as USB **`3547:0007`** plus measured descriptors.
-- The measured profile is the LARK M2 USB-C mobile receiver; do not claim
-  family-wide support for other LARK M2 receiver variants or descriptor shapes.
-- A single TX/RX press toggles LARK M2 noise cancellation and is intentionally
-  host-silent. Double-press either transmitter for the host recording control.
-- The transmitter double press also emits host Volume-Up; Micbridge declares
-  this passive side effect and does not silently exclusive-grab the device.
-- See [SECURITY.md](SECURITY.md) for reporting and data-handling rules.
+The daemon listens on a per-user Unix socket (`0600` in a `0700` directory). There is no default TCP listener.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for PR expectations, dependency updates,
-and how to reproduce CI failures locally.
+Development setup, CI recipes, and PR rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Design references (campaign)
+## Docs
 
-When working from the lance-arch campaign tree:
+| Doc | For |
+|---|---|
+| [User guide](docs/user-guide.md) | Recording, recovery, TUI keys, udev |
+| [Packaging](docs/acceptance/packaging.md) | Install layout and local package candidate |
+| [Contributing](CONTRIBUTING.md) | Dev setup, CI recipes, PR rules |
+| [Security](SECURITY.md) | Vulnerability reporting and privacy |
+| [CI](docs/ci.md) | What GitHub Actions runs |
 
-- Design: `workflow/design/programmable-wireless-mic-api/` (WI-66237e)
-- Evidence: `workflow/explore/hollyland-wireless-mic-usb-investigation/`
-- Festival: `festivals/active/micbridge-hollyland-recording-v1-MH0001/`
+## License
+
+[Apache License 2.0](LICENSE).
