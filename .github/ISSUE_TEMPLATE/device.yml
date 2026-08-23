@@ -1,0 +1,33 @@
+name: Device report
+description: A receiver that Micbridge should or should not match.
+title: "[device] "
+labels: ["device"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Micbridge v0.1 only claims the Hollyland LARK M2 USB-C receiver at USB `3547:0007`.
+        Other variants need measured descriptors, not a brand-name match.
+
+        Redact serials and private paths. Do not attach audio.
+  - type: input
+    id: vidpid
+    attributes:
+      label: USB vendor:product
+      placeholder: 3547:0007
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: What the host sees
+      description: Redacted `lsusb -v` / `micbridge devices --json` / `micbridge doctor --json`. Strip serials and home-directory paths.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Control and capture behavior
+      description: What a single press vs double-press does on the host, and whether capture worked.
+    validations:
+      required: true

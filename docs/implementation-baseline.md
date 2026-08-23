@@ -1,9 +1,13 @@
 # Micbridge implementation baseline
 
+This is a historical bootstrap record from the first implementation. It is
+**not** required to build or use Micbridge. Current instructions are in the
+[README](../README.md) and [user guide](user-guide.md).
+
 Work item: **WI-66237e** (Programmable wireless microphone API)  
 Festival: **MH0001** (`micbridge-hollyland-recording-v1`)  
-Design: `workflow/design/programmable-wireless-mic-api/`  
-Evidence: `workflow/explore/hollyland-wireless-mic-usb-investigation/`
+Design and evidence notes live in the private campaign tree and are not
+needed to run the public repository.
 
 This document is the decision index for repository bootstrap. It does not
 re-derive Hollyland measurements or implement product behavior.
@@ -12,12 +16,12 @@ re-derive Hollyland measurements or implement product behavior.
 
 | Item | Value |
 |---|---|
-| Path | `projects/micbridge` (git submodule of lance-arch) |
+| Path | `github.com/lancekrogers/micbridge` |
 | Default branch | `main` @ `0c97481` (“Initial commit”) |
 | Remote | `https://github.com/lancekrogers/micbridge.git` |
 | Working tree | Clean; only `README.md` present before bootstrap |
 | Current files | `README.md` (one-line project blurb) |
-| Host | Linux `archdtop` / `x86_64` (Linux is the first supported host) |
+| Host | Linux x86_64 (Linux is the first supported host) |
 
 ### Tool versions (host)
 
@@ -147,12 +151,10 @@ Next sequences must introduce:
 
 ## Festival / campaign alignment
 
-| Layer | Location |
-|---|---|
-| Festival | `festivals/active/micbridge-hollyland-recording-v1-MH0001/` |
-| Linked project | `projects/micbridge` |
-| Phase order | BOOTSTRAP → CORE CONTRACTS → AUDIO → HOLLYLAND → UX → ACCEPTANCE |
-| Physical hardware | Not required before phase `004_HOLLYLAND_DRIVER` |
+Internal planning for v0.1 lived in a private campaign festival (`MH0001`).
+The phase order was BOOTSTRAP → CORE CONTRACTS → AUDIO → HOLLYLAND → UX →
+ACCEPTANCE. Physical hardware was not required before the Hollyland driver
+phase. Those paths are not part of this repository.
 
 ## Decisions recorded for bootstrap
 

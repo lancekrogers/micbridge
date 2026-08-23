@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/lancekrogers/micbridge/security/advisories/new
+    about: Private vulnerability reporting. Do not file a public issue.
+  - name: User guide
+    url: https://github.com/lancekrogers/micbridge/blob/main/docs/user-guide.md
+    about: Recording workflow, udev, recovery, and TUI keys.

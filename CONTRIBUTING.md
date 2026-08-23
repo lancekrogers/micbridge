@@ -1,16 +1,18 @@
 # Contributing to Micbridge
 
 Micbridge is a local-first wireless microphone control and recording service.
-This repository may be private; treat device evidence, logs, and recordings as
-sensitive even among collaborators.
+Treat device evidence, logs, and recordings as sensitive even among
+collaborators. Never commit live audio.
+
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 
 | Tool | Notes |
 |---|---|
 | Go | Version from `go.mod` (`1.26`+) |
-| just | Task runner (`just --list`) |
-| C toolchain | Required once malgo/miniaudio is linked (`build-essential`) |
+| just | Task runner (`just --list`); optional if you invoke `go` directly |
+| C toolchain | Required for malgo/miniaudio (`build-essential`) |
 | pkg-config + ALSA headers | Linux: `libasound2-dev` (Debian/Ubuntu) |
 
 Hardware (Hollyland USB `3547:0007`) is **not** required for ordinary
@@ -41,6 +43,13 @@ just build
 just demo
 ```
 
+Without just:
+
+```bash
+go test ./...
+go build -o bin/micbridge ./cmd/micbridge
+```
+
 ## Everyday commands
 
 These are the same recipes CI runs:
@@ -57,7 +66,7 @@ These are the same recipes CI runs:
 | `just install` | install binary to `GOBIN` |
 
 Reproduce a failed CI check locally by running the same recipe from the
-repository root. Example:
+repository root:
 
 ```bash
 just check
@@ -65,11 +74,12 @@ just test-race
 just review
 ```
 
+Details: [docs/ci.md](docs/ci.md).
+
 ### Hardware-only recipes
 
-Anything under `just xdev hil-*` (or similarly named) requires an attached
-receiver and must **not** be required for merge. Do not wire HIL into the
-default `check` path.
+Anything under `just xdev hil-*` requires an attached receiver and must
+**not** be required for merge. Do not wire HIL into the default `check` path.
 
 ## Pull requests
 
@@ -81,13 +91,30 @@ default `check` path.
 - Do not add vendor USB writes, firmware actions, or unproven transmitter
   capabilities.
 
-## Design and evidence
+Match Hollyland only as exact USB `3547:0007` plus the measured LARK M2 USB-C
+receiver descriptor shape. Do not broaden matching to brand, model text, or
+other receiver variants.
 
-Product boundaries live in the campaign design WI-66237e
-(`workflow/design/programmable-wireless-mic-api/` in the lance-arch campaign)
-and `docs/implementation-baseline.md`. Match Hollyland only as exact USB
-`3547:0007` plus the measured LARK M2 USB-C receiver descriptor shape; do not
-broaden matching to brand, model text, or other receiver variants.
+## Repository layout
+
+```text
+cmd/micbridge/          CLI entry
+internal/core/          shared product constants/contracts
+internal/driver/        compiled-in driver registry (fake + Hollyland)
+internal/event/         ordered event bus
+internal/binding/       control → action mapping
+internal/recording/     session / recovery
+internal/audio/         capture (malgo)
+internal/storage/       state root / artifact paths
+internal/api/           local control API
+pkg/client/             supported Go SDK
+docs/                   user guide, acceptance, CI
+.justfiles/             modular just recipes
+.github/workflows/      hardware-free CI
+```
+
+Hollyland-specific code stays in `internal/driver/hollyland35470007`. The API
+and recording packages must not import a concrete driver.
 
 ## Dependency updates
 
@@ -98,5 +125,4 @@ for cgo-native and audio-related upgrades carefully; run `just check` and
 ## License of contributions
 
 By contributing, you confirm you have the right to submit the work and agree
-it may be distributed with the project under the repository’s chosen license
-once one is published in-tree.
+it is licensed under the [Apache License 2.0](LICENSE).
