@@ -10,17 +10,24 @@ Env MICBRIDGE_STATE_DIR "/tmp/micbridge-vhs-recovery"
 Env MICBRIDGE_SOCK "/tmp/micbridge-vhs-recovery/micbridge.sock"
 Env MICBRIDGE_FAKE "1"
 
+Hide
+Type `export PATH="$PWD/bin:$PATH"`
+Enter
 Type "rm -rf /tmp/micbridge-vhs-recovery && mkdir -p /tmp/micbridge-vhs-recovery"
 Enter
-Type "./bin/micbridge serve --json >/tmp/micbridge-vhs-recovery/server.log 2>&1 & server_pid=$!"
+Type "micbridge serve --json >/tmp/micbridge-vhs-recovery/server.log 2>&1 & server_pid=$!"
 Enter
 Sleep 500ms
-Type "./bin/micbridge record --json"
+Type "clear"
+Enter
+Show
+
+Type "micbridge record --json"
 Enter
 Sleep 750ms
 Type "kill -KILL $server_pid && wait $server_pid 2>/dev/null || true"
 Enter
 Sleep 300ms
-Type "./bin/micbridge recover --json"
+Type "micbridge recover --json"
 Enter
 Sleep 1s
