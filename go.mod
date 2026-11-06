@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/gen2brain/malgo v0.11.26
+	github.com/gen2brain/malgo v0.11.27
 	github.com/muesli/termenv v0.16.0
 )
 
